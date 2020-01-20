@@ -23,6 +23,7 @@ find_package(Qt5 COMPONENTS Widgets REQUIRED)
 find_package(Qt5 COMPONENTS Network REQUIRED)
 
 add_subdirectory(third_party/QCodeEditor)
+add_subdirectory(third_party/QScintilla/Qt4Qt5)
 
 configure_file(version.hpp.in ${CMAKE_BINARY_DIR}/generated/version.hpp)
 
@@ -72,9 +73,11 @@ add_executable(CPEditor
     appicon.rc)
 
 include_directories("third_party/QCodeEditor/include")
+include_directories("third_party/QScintilla/Qt4Qt5")
 include_directories("include/")
 include_directories("generated/")
 
 target_link_libraries(CPEditor PRIVATE Qt5::Widgets)
 target_link_libraries(CPEditor PRIVATE Qt5::Network)
 target_link_libraries(CPEditor PRIVATE QCodeEditor)
+target_link_libraries(CPEditor PRIVATE qscintilla2)

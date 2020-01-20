@@ -36,7 +36,7 @@ PreferenceWindow::PreferenceWindow(Settings::SettingManager *manager, QWidget *p
     this->manager = manager;
     setWindowTitle("Preferences");
 
-    editor = new QCodeEditor();
+    editor = new QsciScintilla();
     ui->verticalLayout_3->insertWidget(0, editor);
 
     connect(ui->snippets, SIGNAL(currentTextChanged(const QString &)), this,
@@ -316,28 +316,28 @@ void PreferenceWindow::on_load_snippets_from_file_clicked()
 void PreferenceWindow::onSnippetsLangChanged(const QString &lang)
 {
     updateSnippets();
-    if (lang == "Python")
-    {
-        editor->setHighlighter(new QPythonHighlighter);
-        editor->setCompleter(new QPythonCompleter);
-    }
-    else if (lang == "Java")
-    {
-        editor->setHighlighter(new QCXXHighlighter);
-        editor->setCompleter(nullptr);
-    }
-    else
-    {
-        editor->setHighlighter(new QCXXHighlighter);
-        editor->setCompleter(nullptr);
-    }
+//    if (lang == "Python")
+//    {
+//        editor->setHighlighter(new QPythonHighlighter);
+//        editor->setCompleter(new QPythonCompleter);
+//    }
+//    else if (lang == "Java")
+//    {
+//        editor->setHighlighter(new QCXXHighlighter);
+//        editor->setCompleter(nullptr);
+//    }
+//    else
+//    {
+//        editor->setHighlighter(new QCXXHighlighter);
+//        editor->setCompleter(nullptr);
+//    }
 }
 
 void PreferenceWindow::onCurrentSnippetChanged(const QString &text)
 {
     auto lang = ui->snippets_lang->currentText();
     auto content = manager->getSnippet(lang, text);
-    editor->setPlainText(content);
+    editor->setText(content);
     editor->setFocus(Qt::OtherFocusReason);
 }
 
@@ -345,10 +345,10 @@ void PreferenceWindow::applySettingsToEditor()
 {
     auto data = manager->toData();
 
-    editor->setTabReplace(data.isTabsReplaced);
-    editor->setTabReplaceSize(data.tabStop);
-    editor->setAutoIndentation(data.isAutoIndent);
-    editor->setAutoParentheses(data.isAutoParenthesis);
+//    editor->setTabReplace(data.isTabsReplaced);
+//    editor->setTabReplaceSize(data.tabStop);
+//    editor->setAutoIndentation(data.isAutoIndent);
+//    editor->setAutoParentheses(data.isAutoParenthesis);
 
     if (!data.font.isEmpty())
     {
@@ -359,26 +359,26 @@ void PreferenceWindow::applySettingsToEditor()
 
     const int tabStop = data.tabStop;
     QFontMetrics metric(editor->font());
-    editor->setTabReplaceSize(tabStop);
-    editor->setTabStopDistance(tabStop * metric.horizontalAdvance("9"));
+//    editor->setTabReplaceSize(tabStop);
+//    editor->setTabStopDistance(tabStop * metric.horizontalAdvance("9"));
 
-    if (data.isWrapText)
-        editor->setWordWrapMode(QTextOption::WordWrap);
-    else
-        editor->setWordWrapMode(QTextOption::NoWrap);
+//    if (data.isWrapText)
+//        editor->setWordWrapMode(QTextOption::WordWrap);
+//    else
+//        editor->setWordWrapMode(QTextOption::NoWrap);
 
-    if (data.editorTheme == "Light")
-        editor->setSyntaxStyle(Themes::EditorTheme::getLightTheme());
-    else if (data.editorTheme == "Drakula")
-        editor->setSyntaxStyle(Themes::EditorTheme::getDrakulaTheme());
-    else if (data.editorTheme == "Monkai")
-        editor->setSyntaxStyle(Themes::EditorTheme::getMonkaiTheme());
-    else if (data.editorTheme == "Solarised")
-        editor->setSyntaxStyle(Themes::EditorTheme::getSolarisedTheme());
-    else if (data.editorTheme == "Solarised Dark")
-        editor->setSyntaxStyle(Themes::EditorTheme::getSolarisedDarkTheme());
-    else
-        editor->setSyntaxStyle(Themes::EditorTheme::getLightTheme());
+//    if (data.editorTheme == "Light")
+//        editor->setSyntaxStyle(Themes::EditorTheme::getLightTheme());
+//    else if (data.editorTheme == "Drakula")
+//        editor->setSyntaxStyle(Themes::EditorTheme::getDrakulaTheme());
+//    else if (data.editorTheme == "Monkai")
+//        editor->setSyntaxStyle(Themes::EditorTheme::getMonkaiTheme());
+//    else if (data.editorTheme == "Solarised")
+//        editor->setSyntaxStyle(Themes::EditorTheme::getSolarisedTheme());
+//    else if (data.editorTheme == "Solarised Dark")
+//        editor->setSyntaxStyle(Themes::EditorTheme::getSolarisedDarkTheme());
+//    else
+//        editor->setSyntaxStyle(Themes::EditorTheme::getLightTheme());
 }
 
 void PreferenceWindow::on_snippet_save_clicked()
@@ -387,14 +387,14 @@ void PreferenceWindow::on_snippet_save_clicked()
     if (ui->snippets->currentIndex() != -1)
     {
         auto name = ui->snippets->currentText();
-        manager->setSnippet(lang, name, editor->toPlainText());
+        manager->setSnippet(lang, name, editor->text());
     }
     else
     {
         auto name = getNewSnippetName(lang);
         if (!name.isEmpty())
         {
-            auto content = editor->toPlainText();
+            auto content = editor->text();
             manager->setSnippet(lang, name, content);
             switchToSnippet(name);
         }
@@ -436,7 +436,7 @@ void PreferenceWindow::on_snippet_rename_clicked()
         auto name = getNewSnippetName(lang);
         if (!name.isEmpty())
         {
-            auto content = editor->toPlainText();
+            auto content = editor->text();
             auto currentName = ui->snippets->currentText();
             manager->removeSnippet(lang, currentName);
             manager->setSnippet(lang, name, content);

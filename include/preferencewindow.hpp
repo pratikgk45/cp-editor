@@ -19,7 +19,7 @@
 #define PREFERENCEWINDOW_HPP
 
 #include "SettingsManager.hpp"
-#include <QCodeEditor>
+#include <Qsci/qsciscintilla.h>
 #include <QListWidget>
 #include <QMainWindow>
 
@@ -79,7 +79,7 @@ class PreferenceWindow : public QMainWindow
     QFont currentFont;
     QString cppTemplatePath, pythonTemplatePath, javaTemplatePath;
     Settings::SettingManager *manager;
-    QCodeEditor *editor = nullptr; // for snippets
+    QsciScintilla *editor = nullptr; // for snippets
 
     void extractSettingsFromUi();
     void applySettingsToui();
