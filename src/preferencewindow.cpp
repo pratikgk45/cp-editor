@@ -29,6 +29,13 @@
 #include <QPythonCompleter>
 #include <QPythonHighlighter>
 
+#include <QDebug>
+
+#include <Qsci/qscilexercpp.h>
+#include <Qsci/qscilexerjava.h>
+#include <Qsci/qscilexerpython.h>
+#include <Qsci/qsciapis.h>
+
 PreferenceWindow::PreferenceWindow(Settings::SettingManager *manager, QWidget *parent)
     : QMainWindow(parent), ui(new Ui::PreferenceWindow)
 {
@@ -37,6 +44,18 @@ PreferenceWindow::PreferenceWindow(Settings::SettingManager *manager, QWidget *p
     setWindowTitle("Preferences");
 
     editor = new QsciScintilla();
+    editor->setMarginType(1, QsciScintilla::MarginType::NumberMargin);
+    editor->setMarginWidth(1, "000");
+    editor->setFolding(QsciScintilla::FoldStyle::BoxedTreeFoldStyle);
+
+    editor->setAutoCompletionSource(QsciScintilla::AutoCompletionSource::AcsAll);
+
+    editor->setAutoCompletionThreshold(3);
+    editor->setAutoCompletionReplaceWord(false);
+    editor->setAutoCompletionCaseSensitivity(true);
+
+    editor->SendScintilla(QsciScintilla::SCI_SETHSCROLLBAR, 0);
+
     ui->verticalLayout_3->insertWidget(0, editor);
 
     connect(ui->snippets, SIGNAL(currentTextChanged(const QString &)), this,
@@ -45,7 +64,7 @@ PreferenceWindow::PreferenceWindow(Settings::SettingManager *manager, QWidget *p
             SLOT(onSnippetsLangChanged(const QString &)));
 
     applySettingsToui();
-    resize(QDesktopWidget().availableGeometry(this).size() * 0.40);
+    resize(QDesktopWidget().availableGeometry(this).size() * 0.45);
     setConstraints();
     applySettingsToEditor();
 }
@@ -316,21 +335,25 @@ void PreferenceWindow::on_load_snippets_from_file_clicked()
 void PreferenceWindow::onSnippetsLangChanged(const QString &lang)
 {
     updateSnippets();
-//    if (lang == "Python")
-//    {
-//        editor->setHighlighter(new QPythonHighlighter);
-//        editor->setCompleter(new QPythonCompleter);
-//    }
-//    else if (lang == "Java")
-//    {
-//        editor->setHighlighter(new QCXXHighlighter);
-//        editor->setCompleter(nullptr);
-//    }
-//    else
-//    {
-//        editor->setHighlighter(new QCXXHighlighter);
-//        editor->setCompleter(nullptr);
-//    }
+    if (lang == "Python")
+
+        editor->setLexer(new QsciLexerPython);
+
+    else if (lang == "Java")
+
+        editor->setLexer(new QsciLexerJava);
+
+    else
+        editor->setLexer(new QsciLexerCPP);
+
+    // Lexer reset the colors
+    editor->setUnmatchedBraceForegroundColor(Qt::red);
+    editor->setMatchedBraceBackgroundColor(Qt::darkCyan);
+    editor->setMatchedBraceForegroundColor(Qt::white);
+    editor->setBraceMatching(QsciScintilla::BraceMatch::SloppyBraceMatch);
+
+    // Todo: Everything except the CallTips is working.
+
 }
 
 void PreferenceWindow::onCurrentSnippetChanged(const QString &text)
@@ -345,10 +368,10 @@ void PreferenceWindow::applySettingsToEditor()
 {
     auto data = manager->toData();
 
-//    editor->setTabReplace(data.isTabsReplaced);
-//    editor->setTabReplaceSize(data.tabStop);
-//    editor->setAutoIndentation(data.isAutoIndent);
-//    editor->setAutoParentheses(data.isAutoParenthesis);
+    editor->setTabIndents(data.isTabsReplaced);
+    editor->setTabWidth(data.tabStop);
+    editor->setAutoIndent(data.isAutoIndent);
+    //    editor->setAutoParentheses(data.isAutoParenthesis); // No longer in scintilla
 
     if (!data.font.isEmpty())
     {
@@ -357,28 +380,25 @@ void PreferenceWindow::applySettingsToEditor()
         editor->setFont(font);
     }
 
-    const int tabStop = data.tabStop;
-    QFontMetrics metric(editor->font());
-//    editor->setTabReplaceSize(tabStop);
-//    editor->setTabStopDistance(tabStop * metric.horizontalAdvance("9"));
+    editor->setTabWidth(data.tabStop);
 
-//    if (data.isWrapText)
-//        editor->setWordWrapMode(QTextOption::WordWrap);
-//    else
-//        editor->setWordWrapMode(QTextOption::NoWrap);
+    if (data.isWrapText)
+        editor->setWrapMode(QsciScintilla::WrapMode::WrapWord);
+    else
+        editor->setWrapMode(QsciScintilla::WrapMode::WrapNone);
 
-//    if (data.editorTheme == "Light")
-//        editor->setSyntaxStyle(Themes::EditorTheme::getLightTheme());
-//    else if (data.editorTheme == "Drakula")
-//        editor->setSyntaxStyle(Themes::EditorTheme::getDrakulaTheme());
-//    else if (data.editorTheme == "Monkai")
-//        editor->setSyntaxStyle(Themes::EditorTheme::getMonkaiTheme());
-//    else if (data.editorTheme == "Solarised")
-//        editor->setSyntaxStyle(Themes::EditorTheme::getSolarisedTheme());
-//    else if (data.editorTheme == "Solarised Dark")
-//        editor->setSyntaxStyle(Themes::EditorTheme::getSolarisedDarkTheme());
-//    else
-//        editor->setSyntaxStyle(Themes::EditorTheme::getLightTheme());
+    //    if (data.editorTheme == "Light")
+    //        editor->setSyntaxStyle(Themes::EditorTheme::getLightTheme());
+    //    else if (data.editorTheme == "Drakula")
+    //        editor->setSyntaxStyle(Themes::EditorTheme::getDrakulaTheme());
+    //    else if (data.editorTheme == "Monkai")
+    //        editor->setSyntaxStyle(Themes::EditorTheme::getMonkaiTheme());
+    //    else if (data.editorTheme == "Solarised")
+    //        editor->setSyntaxStyle(Themes::EditorTheme::getSolarisedTheme());
+    //    else if (data.editorTheme == "Solarised Dark")
+    //        editor->setSyntaxStyle(Themes::EditorTheme::getSolarisedDarkTheme());
+    //    else
+    //        editor->setSyntaxStyle(Themes::EditorTheme::getLightTheme());
 }
 
 void PreferenceWindow::on_snippet_save_clicked()
