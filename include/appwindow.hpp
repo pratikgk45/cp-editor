@@ -35,20 +35,24 @@ class AppWindow : public QMainWindow
     Q_OBJECT
 
   public:
-    explicit AppWindow(QWidget *parent = nullptr);
-    explicit AppWindow(QStringList args, QWidget *parent = nullptr);
+    explicit AppWindow(bool noHotExit, QWidget *parent = nullptr);
+    explicit AppWindow(int depth, bool cpp, bool java, bool python, bool noHotExit, const QStringList &paths,
+                       QWidget *parent = nullptr);
+    explicit AppWindow(bool cpp, bool java, bool python, bool noHotExit, int number, const QString &path,
+                       QWidget *parent = nullptr);
     ~AppWindow() override;
 
     void closeEvent(QCloseEvent *event) override;
     void dropEvent(QDropEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
 
+  public slots:
+    void onReceivedMessage(quint32 instanceId, QByteArray message);
+
   private slots:
     void on_actionSupport_me_triggered();
 
     void on_actionAbout_triggered();
-
-    void on_actionClose_All_triggered();
 
     void on_actionAutosave_triggered(bool checked);
 
@@ -57,6 +61,8 @@ class AppWindow : public QMainWindow
     void on_actionNew_Tab_triggered();
 
     void on_actionOpen_triggered();
+
+    void on_actionOpenContest_triggered();
 
     void on_actionRestore_Settings_triggered();
 
@@ -68,15 +74,28 @@ class AppWindow : public QMainWindow
 
     void on_actionSave_All_triggered();
 
+    void on_actionClose_Current_triggered();
+
+    void on_actionClose_All_triggered();
+
+    void on_actionClose_Saved_triggered();
+
     void on_actionCheck_for_updates_triggered();
 
+    void onEditorChanged();
+
     void onTabCloseRequested(int);
+
     void onTabChanged(int);
-    void onEditorChanged(MainWindow *);
+
     void onSaveTimerElapsed();
+
     void onSettingsApplied();
+
     void onSplitterMoved(int, int);
+
     void onIncomingCompanionRequest(Network::CompanionData);
+
     void onViewModeToggle();
 
     void on_actionCompile_triggered();
@@ -101,6 +120,8 @@ class AppWindow : public QMainWindow
 
     void on_confirmTriggered(MainWindow *widget);
 
+    void onTabContextMenuRequested(const QPoint &pos);
+
   private:
     Ui::AppWindow *ui;
     MessageLogger *activeLogger = nullptr;
@@ -119,9 +140,13 @@ class AppWindow : public QMainWindow
     bool diagonistics;
     QVector<QShortcut *> hotkeyObjects;
     void maybeSetHotkeys();
-    void closeAll();
     bool closeTab(int index);
     void openTab(QString path, bool isCompanionTab = false);
+    void openTabs(const QStringList &paths);
+    void openPaths(const QStringList &paths, bool cpp = true, bool java = true, bool python = true, int depth = -1);
+    QStringList openFolder(const QString &path, bool cpp, bool java, bool python, int depth);
+    void openContest(const QString &path, const QString &lang, int number);
+    bool quit();
 
     MainWindow *currentWindow();
     MainWindow *windowIndex(int index);

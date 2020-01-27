@@ -24,76 +24,38 @@ void MessageLogger::setContainer(QTextBrowser *value)
     box->setOpenExternalLinks(true);
 }
 
-void MessageLogger::info(std::string head, std::string body)
+void MessageLogger::message(const QString &head, const QString &body, const QString &color)
 {
-    auto qHead = QString::fromStdString(head).toHtmlEscaped();
-    auto qBody = QString::fromStdString(body).toHtmlEscaped();
-    std::string ans = "<b>[";
-    auto timestamp = QDateTime::currentSecsSinceEpoch();
-    auto val = QDateTime::fromSecsSinceEpoch(timestamp).time();
-    ans += val.toString().toStdString();
-    ans += "] [";
-    ans += qHead.toStdString();
-    ans += "] </b>";
-    ans += "[";
-    if (qBody.contains('\n'))
-    {
-        ans += "<br>";
-        ans += qBody.replace("\n", "<br>").toStdString();
-    }
+    auto newHead = head.toHtmlEscaped().replace(" ", "&nbsp;");
+    auto newBody = body.toHtmlEscaped().replace(" ", "&nbsp;");
+    QString res = "<b>[" + QTime::currentTime().toString() + "] [" + newHead +
+                  "] </b><span style=\"font-family:Consolas,Courier,monospace;";
+    if (!color.isEmpty())
+        res += "color:" + color;
+    res += "\">[";
+    if (newBody.contains('\n'))
+        res += "<br>" + newBody.replace("\n", "<br>");
     else
-        ans += qBody.toStdString();
-    ans += "]";
-
-    box->append(QString::fromStdString(ans));
+        res += newBody;
+    res += "]</font>";
+    box->append(res);
 }
 
-void MessageLogger::warn(std::string head, std::string body)
+void MessageLogger::info(const QString &head, const QString &body)
 {
-    auto qHead = QString::fromStdString(head).toHtmlEscaped();
-    auto qBody = QString::fromStdString(body).toHtmlEscaped();
-    std::string ans = "<b>[";
-    auto timestamp = QDateTime::currentSecsSinceEpoch();
-    auto val = QDateTime::fromSecsSinceEpoch(timestamp).time();
-    ans += val.toString().toStdString();
-    ans += "] [";
-    ans += qHead.toStdString();
-    ans += "] </b>";
-    ans += "<font color=green>[";
-    if (qBody.contains('\n'))
-    {
-        ans += "<br>";
-        ans += qBody.replace("\n", "<br>").toStdString();
-    }
-    else
-        ans += qBody.toStdString();
-    ans += "]</font>";
-
-    box->append(QString::fromStdString(ans));
+    message(head, body, "");
 }
-void MessageLogger::error(std::string head, std::string body)
+
+void MessageLogger::warn(const QString &head, const QString &body)
 {
-    auto qHead = QString::fromStdString(head).toHtmlEscaped();
-    auto qBody = QString::fromStdString(body).toHtmlEscaped();
-    std::string ans = "<b>[";
-    auto timestamp = QDateTime::currentSecsSinceEpoch();
-    auto val = QDateTime::fromSecsSinceEpoch(timestamp).time();
-    ans += val.toString().toStdString();
-    ans += "] [";
-    ans += qHead.toStdString();
-    ans += "] </b>";
-    ans += "<font color=red>[";
-    if (qBody.contains('\n'))
-    {
-        ans += "<br>";
-        ans += qBody.replace("\n", "<br>").toStdString();
-    }
-    else
-        ans += qBody.toStdString();
-    ans += "]</font>";
-
-    box->append(QString::fromStdString(ans));
+    message(head, body, "green");
 }
+
+void MessageLogger::error(const QString &head, const QString &body)
+{
+    message(head, body, "red");
+}
+
 void MessageLogger::clear()
 {
     box->clear();

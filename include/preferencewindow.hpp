@@ -58,7 +58,9 @@ class PreferenceWindow : public QMainWindow
 
     void on_java_template_clicked();
 
-    void on_load_snippets_from_file_clicked();
+    void on_load_snippets_from_files_clicked();
+
+    void on_extract_snippets_to_files_clicked();
 
     void onSnippetsLangChanged(const QString &lang);
 
@@ -73,6 +75,8 @@ class PreferenceWindow : public QMainWindow
     void on_snippet_delete_clicked();
 
     void on_snippet_rename_clicked();
+
+    void on_transparency_slider_valueChanged(int value);
 
   private:
     Ui::PreferenceWindow *ui;

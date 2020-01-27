@@ -28,6 +28,7 @@
 #include <QMessageBox>
 #include <QPythonCompleter>
 #include <QPythonHighlighter>
+#include <QSaveFile>
 
 #include <QDebug>
 
@@ -79,6 +80,9 @@ void PreferenceWindow::setConstraints()
 
     ui->companion_port->setMinimum(10000);
     ui->companion_port->setMaximum(65535);
+
+    ui->transparency_slider->setMinimum(60);
+    ui->transparency_slider->setMaximum(100);
 }
 
 void PreferenceWindow::updateSnippets()
@@ -114,6 +118,7 @@ void PreferenceWindow::applySettingsToui()
     ui->parentheses->setChecked(manager->isAutoParenthesis());
     ui->replace_tabs->setChecked(manager->isTabsReplaced());
     ui->format_on_save->setChecked(manager->isFormatOnSave());
+    ui->use_hot_exit->setChecked(manager->isUseHotExit());
 
     ui->defaultLang->setCurrentText(manager->getDefaultLang());
 
@@ -128,6 +133,7 @@ void PreferenceWindow::applySettingsToui()
     ui->python_start_cmd->setText(manager->getRunCommandPython());
 
     ui->companion_use->setChecked(manager->isCompetitiveCompanionActive());
+    ui->companion_new_tab->setChecked(manager->isCompetitiveCompanionOpenNewTab());
     ui->companion_port->setValue(manager->getConnectionPort());
 
     ui->clang_format_binary->setText(manager->getClangFormatBinary());
@@ -157,11 +163,15 @@ void PreferenceWindow::applySettingsToui()
     ui->toggle_hotkey->setKeySequence(manager->getHotkeyViewModeToggler());
     ui->snippets_hotkey->setKeySequence(manager->getHotkeySnippets());
 
+    ui->transparency_slider->setValue(manager->getTransparency());
+
     auto lang = manager->getDefaultLang();
     int lang_index = ui->snippets_lang->findText(lang);
     if (lang_index != -1)
         ui->snippets_lang->setCurrentIndex(lang_index);
     onSnippetsLangChanged(lang);
+
+    ui->cf_path->setText(manager->getCFPath());
 }
 
 void PreferenceWindow::extractSettingsFromUi()
@@ -176,6 +186,7 @@ void PreferenceWindow::extractSettingsFromUi()
     manager->setAutoParenthesis(ui->parentheses->isChecked());
     manager->setTabsReplaced(ui->replace_tabs->isChecked());
     manager->formatOnSave(ui->format_on_save->isChecked());
+    manager->setUseHotExit(ui->use_hot_exit->isChecked());
 
     manager->setDefaultLanguage(ui->defaultLang->currentText());
 
@@ -193,6 +204,7 @@ void PreferenceWindow::extractSettingsFromUi()
     manager->setClangFormatStyle(ui->clang_format_style->toPlainText());
 
     manager->setCompetitiveCompanionActive(ui->companion_use->isChecked());
+    manager->setCompetitiveCompanionOpenNewTab(ui->companion_new_tab->isChecked());
     manager->setConnectionPort(ui->companion_port->value());
 
     manager->setBeta(ui->beta_update->isChecked());
@@ -213,12 +225,15 @@ void PreferenceWindow::extractSettingsFromUi()
     manager->setHotkeyCompileRun(ui->compileRun_hotkey->keySequence());
     manager->setHotkeyViewModeToggler(ui->toggle_hotkey->keySequence());
     manager->setHotkeySnippets(ui->snippets_hotkey->keySequence());
+
+    manager->setCFPath(ui->cf_path->text());
 }
 
 void PreferenceWindow::updateShow()
 {
     applySettingsToui();
     show();
+    raise();
 }
 
 PreferenceWindow::~PreferenceWindow()
@@ -298,7 +313,7 @@ void PreferenceWindow::on_java_template_clicked()
     ui->java_template->setText("..." + javaTemplatePath.right(30));
 }
 
-void PreferenceWindow::on_load_snippets_from_file_clicked()
+void PreferenceWindow::on_load_snippets_from_files_clicked()
 {
     auto lang = ui->snippets_lang->currentText();
     QString fileType = "C++ Files (*.cpp *.hpp *.h *.cc *.cxx *.c)";
@@ -328,6 +343,46 @@ void PreferenceWindow::on_load_snippets_from_file_clicked()
                 switchToSnippet(snippetName);
             }
             file.close();
+        }
+    }
+}
+
+void PreferenceWindow::on_extract_snippets_to_files_clicked()
+{
+    auto lang = ui->snippets_lang->currentText();
+    QString suffix = ".cpp";
+    QString fileType = "C++ Files (*.cpp *.hpp *.h *.cc *.cxx *.c)";
+    if (lang == "Java")
+    {
+        suffix = ".java";
+        fileType = "Java Files (*.java)";
+    }
+    else if (lang == "Python")
+    {
+        suffix = ".py";
+        fileType = "Python Files (*.py)";
+    }
+    auto dirPath = QFileDialog::getExistingDirectory(this, "Choose a directory to extract snippets to");
+    if (QFile::exists(dirPath))
+    {
+        QDir dir(dirPath);
+        auto names = manager->getSnippetsNames(lang);
+        for (auto name : names)
+        {
+            auto content = manager->getSnippet(lang, name);
+            auto filePath = dir.filePath(name + suffix);
+            if (QFile::exists(filePath))
+                filePath = QFileDialog::getSaveFileName(this, "Save snippet " + name + " to:", dirPath, fileType);
+            while (!filePath.isEmpty())
+            {
+                QSaveFile saveFile(filePath);
+                saveFile.open(QIODevice::WriteOnly | QIODevice::Text);
+                saveFile.write(content.toStdString().c_str());
+                if (saveFile.commit())
+                    break;
+                QMessageBox::warning(this, "File save error", "Failed to save to " + filePath);
+                filePath = QFileDialog::getSaveFileName(this, "Save snippet " + name + " to:", dirPath, fileType);
+            }
         }
     }
 }
@@ -463,6 +518,12 @@ void PreferenceWindow::on_snippet_rename_clicked()
             switchToSnippet(name);
         }
     }
+}
+
+void PreferenceWindow::on_transparency_slider_valueChanged(int value)
+{
+    manager->setTransparency(value);
+    parentWidget()->setWindowOpacity(value / 100.0);
 }
 
 QString PreferenceWindow::getNewSnippetName(const QString &lang, const QString &old)

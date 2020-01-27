@@ -21,6 +21,7 @@
 #include <MessageLogger.hpp>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QSystemTrayIcon>
 
 namespace Network
 {
@@ -29,17 +30,20 @@ class CFTools : public QObject
     Q_OBJECT
 
   public:
-    CFTools(MessageLogger *logger);
+    CFTools(QString path, MessageLogger *logger);
     ~CFTools();
     void submit(const QString &filePath, const QString &url, const QString &lang);
-    static bool check();
+    static bool check(QString path);
 
+    void updatePath(QString p);
   private slots:
     void onReadReady();
 
   private:
     QProcess *CFToolProcess = nullptr;
+    QSystemTrayIcon *icon = nullptr;
     MessageLogger *log;
+    QString path;
 };
 } // namespace Network
 

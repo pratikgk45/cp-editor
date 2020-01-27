@@ -16,54 +16,85 @@
  */
 
 #include "cftools.hpp"
+#include <QFileInfo>
 #include <QUrl>
 
 namespace Network
 {
 
-CFTools::CFTools(MessageLogger *logger)
+CFTools::CFTools(QString path, MessageLogger *logger) : path(path)
 {
     log = logger;
+    icon = new QSystemTrayIcon();
     CFToolProcess = new QProcess();
 }
 
 CFTools::~CFTools()
 {
+    if (icon != nullptr)
+        delete icon;
     if (CFToolProcess != nullptr)
-    {
         delete CFToolProcess;
-    }
 }
 
 void CFTools::submit(const QString &filePath, const QString &url, const QString &lang)
 {
-    QRegularExpression regex(".*://codeforces.com/contest/([1-9][0-9]*)/problem/([A-Z][1-9]?)");
-    auto match = regex.match(url);
-    auto problemContestId = match.captured(1);
-    auto problemCode = match.captured(2);
-
-    CFToolProcess->setProgram("cf");
+    QString problemContestId, problemCode;
+    QRegularExpression regexContest(".*://codeforces.com/contest/([1-9][0-9]*)/problem/(0|[A-Z][1-9]?)");
+    auto matchContest = regexContest.match(url);
+    if (matchContest.hasMatch())
+    {
+        problemContestId = matchContest.captured(1);
+        problemCode = matchContest.captured(2);
+        if (problemCode == "0")
+            problemCode = "A";
+    }
+    else
+    {
+        QRegularExpression regexProblemSet(".*://codeforces.com/problemset/problem/([1-9][0-9]*)/([A-Z][1-9]?)");
+        auto matchProblemSet = regexProblemSet.match(url);
+        if (matchProblemSet.hasMatch())
+        {
+            problemContestId = matchProblemSet.captured(1);
+            problemCode = matchProblemSet.captured(2);
+        }
+        else
+        {
+            log->error("CF Tool", "Failed to parse the problem URL " + url);
+            return;
+        }
+    }
+    CFToolProcess->setProgram(path);
     CFToolProcess->setArguments({"submit", problemContestId, problemCode, filePath});
     connect(CFToolProcess, SIGNAL(readyReadStandardOutput()), this, SLOT(onReadReady()));
     CFToolProcess->start();
 }
 
-bool CFTools::check()
+bool CFTools::check(QString path)
 {
     QProcess checkProcess;
-    checkProcess.start("cf");
+
+    checkProcess.start(path, {"--version"});
+
     bool finished = checkProcess.waitForFinished(2000);
     return finished && checkProcess.exitCode() == 0;
+}
+
+void CFTools::updatePath(QString p)
+{
+    path = p;
 }
 
 void CFTools::onReadReady()
 {
     QString newResponse = CFToolProcess->readAll();
-    auto shortStatus = newResponse.right(newResponse.size() - newResponse.indexOf("status:") - 8).toStdString();
+    auto shortStatus = newResponse.right(newResponse.size() - newResponse.indexOf("status:") - 8);
     if (newResponse.contains("status: Happy New Year") || newResponse.contains("status: Accepted"))
     {
-        // Warnings are green so its a hack to look green
-        log->warn("CFTool", shortStatus);
+        log->message("CF Tool", shortStatus, "green");
+        icon->show();
+        icon->showMessage("CF Tool", shortStatus);
+        icon->hide();
     }
     else if (newResponse.contains("status: Running on"))
     {
@@ -71,7 +102,10 @@ void CFTools::onReadReady()
     }
     else
     {
-        log->error("CFTool", newResponse.toStdString());
+        log->error("CF Tool", newResponse);
+        icon->show();
+        icon->showMessage("CF Tool", newResponse, QSystemTrayIcon::Warning);
+        icon->hide();
     }
 }
 

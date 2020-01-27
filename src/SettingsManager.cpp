@@ -26,6 +26,16 @@ SettingManager::SettingManager()
 {
     mSettingsFile = QStandardPaths::writableLocation(QStandardPaths::HomeLocation) + "/" + SETTINGS_FILE;
     mSettings = new QSettings(mSettingsFile, QSettings::IniFormat);
+
+    // backwords compatibility
+
+    if (getDefaultLang() == "Cpp")
+        setDefaultLanguage("C++");
+
+    auto names = getSnippetsNames("Cpp");
+    for (auto name : names)
+        setSnippet("C++", name, getSnippet("Cpp", name));
+    mSettings->remove("snippets/Cpp");
 }
 
 bool SettingManager::isWrapText()
@@ -61,6 +71,11 @@ bool SettingManager::isSaveTests()
     return mSettings->value("save_tests", "false").toBool();
 }
 
+bool SettingManager::isUseHotExit()
+{
+    return mSettings->value("use_hot_exit", "true").toBool();
+}
+
 bool SettingManager::isMaximizedWindow()
 {
     return mSettings->value("win_max", "false").toBool();
@@ -75,6 +90,12 @@ bool SettingManager::isCompetitiveCompanionActive()
 {
     return mSettings->value("competitive_use", "false").toBool();
 }
+
+bool SettingManager::isCompetitiveCompanionOpenNewTab()
+{
+    return mSettings->value("companion_new_tab", "true").toBool();
+}
+
 bool SettingManager::isHotkeyInUse()
 {
     return mSettings->value("hotkey_use", "false").toBool();
@@ -122,7 +143,8 @@ QString SettingManager::getRuntimeArgumentsPython()
 }
 QString SettingManager::getDefaultLang()
 {
-    return mSettings->value("lang", "Cpp").toString();
+    auto res = mSettings->value("lang", "C++").toString();
+    return res;
 }
 QString SettingManager::getTemplatePathCpp()
 {
@@ -174,6 +196,11 @@ void SettingManager::setCompetitiveCompanionActive(bool value)
     mSettings->setValue("competitive_use", value);
 }
 
+void SettingManager::setCompetitiveCompanionOpenNewTab(bool value)
+{
+    mSettings->setValue("companion_new_tab", value);
+}
+
 void SettingManager::setWrapText(bool value)
 {
     if (value)
@@ -220,6 +247,14 @@ void SettingManager::setSaveTests(bool value)
         mSettings->setValue("save_tests", QString::fromStdString("true"));
     else
         mSettings->setValue("save_tests", QString::fromStdString("false"));
+}
+
+void SettingManager::setUseHotExit(bool value)
+{
+    if (value)
+        mSettings->setValue("use_hot_exit", QString::fromStdString("true"));
+    else
+        mSettings->setValue("use_hot_exit", QString::fromStdString("false"));
 }
 
 void SettingManager::setMaximizedWindow(bool value)
@@ -391,6 +426,55 @@ QStringList SettingManager::getSnippetsNames(QString lang)
     return ret;
 }
 
+int SettingManager::getNumberOfTabs()
+{
+    return mSettings->value("number_of_tabs", 0).toInt();
+}
+void SettingManager::setNumberOfTabs(int value)
+{
+    mSettings->setValue("number_of_tabs", value);
+}
+int SettingManager::getCurrentIndex()
+{
+    return mSettings->value("current_index", -1).toInt();
+}
+void SettingManager::setCurrentIndex(int index)
+{
+    mSettings->setValue("current_index", index);
+}
+void SettingManager::clearEditorStatus()
+{
+    mSettings->remove("editor_status");
+}
+QMap<QString, QVariant> SettingManager::getEditorStatus(int index)
+{
+    return mSettings->value("editor_status/" + QString::number(index)).toMap();
+}
+void SettingManager::setEditorStatus(int index, const QMap<QString, QVariant> &status)
+{
+    mSettings->setValue("editor_status/" + QString::number(index), status);
+}
+
+int SettingManager::getTransparency()
+{
+    return mSettings->value("transparency", 100).toInt();
+}
+
+void SettingManager::setTransparency(int val)
+{
+    mSettings->setValue("transparency", val);
+}
+
+QString SettingManager::getCFPath()
+{
+    return mSettings->value("cf_path", "cf").toString();
+}
+
+void SettingManager::setCFPath(QString path)
+{
+    mSettings->setValue("cf_path", path);
+}
+
 void SettingManager::setHotkeyViewModeToggler(QKeySequence sequence)
 {
     mSettings->setValue("hotkey_mode_toggle", sequence.toString());
@@ -502,6 +586,7 @@ SettingsData SettingManager::toData()
     data.hotkeySnippets = getHotkeySnippets();
     data.viewMode = getViewMode();
     data.splitterSizes = getSplitterSizes();
+    data.cfPath = getCFPath();
 
     return data;
 }

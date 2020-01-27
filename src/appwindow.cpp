@@ -18,43 +18,91 @@
 #include "appwindow.hpp"
 #include "../ui/ui_appwindow.h"
 #include <EditorTheme.hpp>
+#include <QClipboard>
 #include <QDesktopServices>
 #include <QFileDialog>
 #include <QInputDialog>
+#include <QJsonDocument>
 #include <QMap>
 #include <QMessageBox>
 #include <QMetaMethod>
 #include <QMimeData>
+#include <QProgressDialog>
 #include <QTimer>
 #include <QUrl>
 
-AppWindow::AppWindow(QStringList args, QWidget *parent) : AppWindow(parent)
-{
-    ui->tabWidget->clear();
-    if (args.size() > 1)
-        for (int i = 1; i < args.size(); ++i)
-            openTab(args[i]);
-    else
-        openTab("");
-}
-
-AppWindow::AppWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::AppWindow)
+AppWindow::AppWindow(bool noHotExit, QWidget *parent) : QMainWindow(parent), ui(new Ui::AppWindow)
 {
     ui->setupUi(this);
-    ui->tabWidget->clear();
     setAcceptDrops(true);
-
     allocate();
     setConnections();
-
-    auto windowTemp = new MainWindow("", settingManager->toData());
-    ui->tabWidget->addTab(windowTemp, windowTemp->getFileName());
 
     if (settingManager->isCheckUpdateOnStartup())
         updater->checkUpdate();
 
+    setWindowOpacity(settingManager->getTransparency() / 100.0);
+
     applySettings();
     onSettingsApplied();
+
+    if (!noHotExit && settingManager->isUseHotExit())
+    {
+        int length = settingManager->getNumberOfTabs();
+
+        QProgressDialog progress(this);
+        progress.setWindowModality(Qt::WindowModal);
+        progress.setWindowTitle("Restoring Last Session");
+        progress.setMaximum(length);
+        progress.setValue(0);
+
+        auto oldSize = size();
+        setUpdatesEnabled(false);
+
+        for (int i = 0; i < length; ++i)
+        {
+            if (progress.wasCanceled())
+                break;
+            auto status = MainWindow::EditorStatus(settingManager->getEditorStatus(i));
+            progress.setValue(i);
+            openTab("");
+            currentWindow()->loadStatus(status);
+            progress.setLabelText(currentWindow()->getTabTitle(true, false));
+        }
+
+        progress.setValue(length);
+
+        setUpdatesEnabled(true);
+        resize(oldSize);
+
+        int index = settingManager->getCurrentIndex();
+        if (index >= 0 && index < ui->tabWidget->count())
+            ui->tabWidget->setCurrentIndex(index);
+    }
+}
+
+AppWindow::AppWindow(int depth, bool cpp, bool java, bool python, bool noHotExit, const QStringList &paths,
+                     QWidget *parent)
+    : AppWindow(noHotExit, parent)
+{
+    openPaths(paths, cpp, java, python, depth);
+    if (ui->tabWidget->count() == 0)
+        openTab("");
+}
+
+AppWindow::AppWindow(bool cpp, bool java, bool python, bool noHotExit, int number, const QString &path, QWidget *parent)
+    : AppWindow(noHotExit, parent)
+{
+    QString lang = settingManager->getDefaultLang();
+    if (cpp)
+        lang = "C++";
+    else if (java)
+        lang = "Java";
+    else if (python)
+        lang = "Python";
+    openContest(path, lang, number);
+    if (ui->tabWidget->count() == 0)
+        openTab("");
 }
 
 AppWindow::~AppWindow()
@@ -73,8 +121,7 @@ AppWindow::~AppWindow()
 
 void AppWindow::closeEvent(QCloseEvent *event)
 {
-    closeAll();
-    if (ui->tabWidget->count() == 0)
+    if (quit())
         event->accept();
     else
         event->ignore();
@@ -90,12 +137,11 @@ void AppWindow::dragEnterEvent(QDragEnterEvent *event)
 
 void AppWindow::dropEvent(QDropEvent *event)
 {
-    auto files = event->mimeData()->urls();
-    for (auto e : files)
-    {
-        auto fileName = e.toLocalFile();
-        openTab(fileName);
-    }
+    auto urls = event->mimeData()->urls();
+    QStringList paths;
+    for (auto &e : urls)
+        paths.append(e.toLocalFile());
+    openPaths(paths);
 }
 
 /******************** PRIVATE METHODS ********************/
@@ -103,6 +149,9 @@ void AppWindow::setConnections()
 {
     connect(ui->tabWidget, SIGNAL(tabCloseRequested(int)), this, SLOT(onTabCloseRequested(int)));
     connect(ui->tabWidget, SIGNAL(currentChanged(int)), this, SLOT(onTabChanged(int)));
+    ui->tabWidget->tabBar()->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->tabWidget->tabBar(), SIGNAL(customContextMenuRequested(const QPoint &)), this,
+            SLOT(onTabContextMenuRequested(const QPoint &)));
     connect(timer, SIGNAL(timeout()), this, SLOT(onSaveTimerElapsed()));
 
     connect(preferenceWindow, SIGNAL(settingsApplied()), this, SLOT(onSettingsApplied()));
@@ -203,20 +252,14 @@ void AppWindow::maybeSetHotkeys()
     }
 }
 
-void AppWindow::closeAll()
-{
-    for (int t = 0; t < ui->tabWidget->count(); t++)
-        if (closeTab(t))
-            --t;
-}
-
 bool AppWindow::closeTab(int index)
 {
     auto tmp = windowIndex(index);
     if (tmp->closeConfirm())
     {
         ui->tabWidget->removeTab(index);
-        onEditorChanged(currentWindow());
+        onEditorChanged();
+        delete tmp;
         return true;
     }
     return false;
@@ -254,9 +297,10 @@ void AppWindow::openTab(QString path, bool iscompanionOpenedTab)
             QSet<int> vis;
             for (int t = 0; t < ui->tabWidget->count(); ++t)
             {
-                if (windowIndex(t)->isUntitled())
+                auto tmp = windowIndex(t);
+                if (tmp->isUntitled() && tmp->getProblemURL().isEmpty())
                 {
-                    vis.insert(windowIndex(t)->untitledIndex);
+                    vis.insert(tmp->getUntitledIndex());
                 }
             }
             for (index = 1; vis.contains(index); ++index)
@@ -264,7 +308,7 @@ void AppWindow::openTab(QString path, bool iscompanionOpenedTab)
         }
         auto fsp = new MainWindow(path, settingManager->toData(), index);
         connect(fsp, SIGNAL(confirmTriggered(MainWindow *)), this, SLOT(on_confirmTriggered(MainWindow *)));
-        connect(fsp, SIGNAL(editorChanged(MainWindow *)), this, SLOT(onEditorChanged(MainWindow *)));
+        connect(fsp, SIGNAL(editorChanged()), this, SLOT(onEditorChanged()));
         QString lang = settingManager->getDefaultLang();
 
         if (path.endsWith(".java"))
@@ -273,9 +317,9 @@ void AppWindow::openTab(QString path, bool iscompanionOpenedTab)
             lang = "Python";
         else if (path.endsWith(".cpp") || path.endsWith(".cxx") || path.endsWith(".c") || path.endsWith(".cc") ||
                  path.endsWith(".hpp") || path.endsWith(".h"))
-            lang = "Cpp";
+            lang = "C++";
 
-        ui->tabWidget->addTab(fsp, fsp->getFileName());
+        ui->tabWidget->addTab(fsp, fsp->getTabTitle(false, true));
         fsp->setLanguage(lang);
         ui->tabWidget->setCurrentIndex(t);
     }
@@ -292,24 +336,131 @@ void AppWindow::openTab(QString path, bool iscompanionOpenedTab)
         }
 
         int t = ui->tabWidget->count();
-        int index = 0;
-        QSet<int> vis;
-        for (int t = 0; t < ui->tabWidget->count(); ++t)
-        {
-            if (windowIndex(t)->isUntitled())
-            {
-                vis.insert(windowIndex(t)->untitledIndex);
-            }
-        }
-        for (index = 1; vis.contains(index); ++index)
-            ;
-        auto fsp = new MainWindow("", settingManager->toData(), index);
+        auto fsp = new MainWindow("", settingManager->toData(), 0);
         connect(fsp, SIGNAL(confirmTriggered(MainWindow *)), this, SLOT(on_confirmTriggered(MainWindow *)));
-        connect(fsp, SIGNAL(editorChanged(MainWindow *)), this, SLOT(onEditorChanged(MainWindow *)));
-        ui->tabWidget->addTab(fsp, fsp->getFileName());
+        connect(fsp, SIGNAL(editorChanged()), this, SLOT(onEditorChanged()));
+        ui->tabWidget->addTab(fsp, fsp->getTabTitle(false, true));
         ui->tabWidget->setCurrentIndex(t);
     }
     currentWindow()->focusOnEditor();
+}
+
+void AppWindow::openTabs(const QStringList &paths)
+{
+    int length = paths.length();
+
+    QProgressDialog progress(this);
+    progress.setWindowModality(Qt::WindowModal);
+    progress.setWindowTitle("Opening Files");
+    progress.setMaximum(length);
+    progress.setValue(0);
+
+    auto oldSize = size();
+    setUpdatesEnabled(false);
+
+    for (int i = 0; i < length; ++i)
+    {
+        if (progress.wasCanceled())
+            break;
+        progress.setValue(i);
+        openTab(paths[i]);
+        progress.setLabelText(currentWindow()->getTabTitle(true, false));
+    }
+
+    setUpdatesEnabled(true);
+    resize(oldSize);
+
+    progress.setValue(length);
+}
+
+void AppWindow::openPaths(const QStringList &paths, bool cpp, bool java, bool python, int depth)
+{
+    QStringList res;
+    for (auto &path : paths)
+    {
+        if (QDir(path).exists())
+            res.append(openFolder(path, cpp, java, python, depth));
+        else
+            res.append(path);
+    }
+    openTabs(res);
+}
+
+QStringList AppWindow::openFolder(const QString &path, bool cpp, bool java, bool python, int depth)
+{
+    auto entries = QDir(path).entryInfoList(QDir::NoDotAndDotDot | QDir::AllEntries);
+    QStringList res;
+    for (auto &entry : entries)
+    {
+        if (entry.isDir())
+        {
+            if (depth > 0)
+                res.append(openFolder(entry.canonicalFilePath(), cpp, java, python, depth - 1));
+            else if (depth == -1)
+                res.append(openFolder(entry.canonicalFilePath(), cpp, java, python, -1));
+        }
+        else if (cpp && QStringList({"cpp", "hpp", "h", "cc", "cxx", "c"}).contains(entry.suffix()) ||
+                 java && QStringList({"java"}).contains(entry.suffix()) ||
+                 python && QStringList({"py", "py3"}).contains(entry.suffix()))
+        {
+            res.append(entry.canonicalFilePath());
+        }
+    }
+    return res;
+}
+
+void AppWindow::openContest(const QString &path, const QString &lang, int number)
+{
+    QDir dir(path), parent(path);
+    parent.cdUp();
+    if (!dir.exists() && parent.exists())
+        parent.mkdir(dir.dirName());
+
+    auto language = lang.isEmpty() ? settingManager->getDefaultLang() : lang;
+
+    QStringList tabs;
+
+    for (int i = 0; i < number; ++i)
+    {
+        QString name('A' + i);
+        if (language == "C++")
+            name += ".cpp";
+        else if (language == "Java")
+            name += ".java";
+        else if (language == "Python")
+            name += ".py";
+        tabs.append(QDir(path).filePath(name));
+    }
+
+    openTabs(tabs);
+}
+
+bool AppWindow::quit()
+{
+    settingManager->clearEditorStatus();
+    if (settingManager->isUseHotExit())
+    {
+        if (ui->tabWidget->count() == 1 && windowIndex(0)->isUntitled() && !windowIndex(0)->isTextChanged())
+        {
+            settingManager->setNumberOfTabs(0);
+            settingManager->setCurrentIndex(-1);
+        }
+        else
+        {
+            settingManager->setNumberOfTabs(ui->tabWidget->count());
+            settingManager->setCurrentIndex(ui->tabWidget->currentIndex());
+            for (int i = 0; i < ui->tabWidget->count(); ++i)
+            {
+                settingManager->setEditorStatus(i, windowIndex(i)->toStatus().toMap());
+            }
+        }
+        return true;
+    }
+    else
+    {
+        on_actionClose_All_triggered();
+        return ui->tabWidget->count() == 0;
+    }
 }
 
 /***************** ABOUT SECTION ***************************/
@@ -337,11 +488,6 @@ void AppWindow::on_actionAbout_triggered()
 
 /******************* FILES SECTION *************************/
 
-void AppWindow::on_actionClose_All_triggered()
-{
-    closeAll();
-}
-
 void AppWindow::on_actionAutosave_triggered(bool checked)
 {
     settingManager->setAutoSave(checked);
@@ -353,8 +499,7 @@ void AppWindow::on_actionAutosave_triggered(bool checked)
 
 void AppWindow::on_actionQuit_triggered()
 {
-    closeAll();
-    if (ui->tabWidget->count() == 0)
+    if (quit())
         QApplication::exit();
 }
 
@@ -365,22 +510,46 @@ void AppWindow::on_actionNew_Tab_triggered()
 
 void AppWindow::on_actionOpen_triggered()
 {
-    auto fileName = QFileDialog::getOpenFileName(this, tr("Open File"), "",
-                                                 "Source Files (*.cpp *.hpp *.h *.cc *.cxx *.c *.py *.py3 *.java)");
-    if (fileName.isEmpty())
-        return;
+    auto fileNames = QFileDialog::getOpenFileNames(this, tr("Open Files"), "",
+                                                   "Source Files (*.cpp *.hpp *.h *.cc *.cxx *.c *.py *.py3 *.java)");
+    openTabs(fileNames);
+}
 
-    openTab(fileName);
+void AppWindow::on_actionOpenContest_triggered()
+{
+    auto path = QFileDialog::getExistingDirectory(this, "Open Contest");
+    if (QFile::exists(path) && QFileInfo(path).isDir())
+    {
+        bool ok = false;
+        int number =
+            QInputDialog::getInt(this, "Open Contest", "Number of problems in this contest:", 5, 0, 26, 1, &ok);
+        if (ok)
+        {
+            int current = 0;
+            if (settingManager->getDefaultLang() == "Java")
+                current = 1;
+            else if (settingManager->getDefaultLang() == "Python")
+                current = 2;
+            auto lang = QInputDialog::getItem(this, "Open Contest", "Choose a language", {"C++", "Java", "Python"},
+                                              current, false, &ok);
+            if (ok)
+            {
+                openContest(path, lang, number);
+            }
+        }
+    }
 }
 
 void AppWindow::on_actionSave_triggered()
 {
-    currentWindow()->save(true);
+    if (currentWindow() != nullptr)
+        currentWindow()->save(true, "Save");
 }
 
 void AppWindow::on_actionSave_As_triggered()
 {
-    currentWindow()->saveAs();
+    if (currentWindow() != nullptr)
+        currentWindow()->saveAs();
 }
 
 void AppWindow::on_actionSave_All_triggered()
@@ -388,8 +557,33 @@ void AppWindow::on_actionSave_All_triggered()
     for (int t = 0; t < ui->tabWidget->count(); ++t)
     {
         auto tmp = windowIndex(t);
-        tmp->save(true);
+        tmp->save(true, "Save All");
     }
+}
+
+void AppWindow::on_actionClose_Current_triggered()
+{
+    int index = ui->tabWidget->currentIndex();
+    if (index != -1)
+        closeTab(index);
+}
+
+void AppWindow::on_actionClose_All_triggered()
+{
+    for (int t = 0; t < ui->tabWidget->count(); t++)
+    {
+        if (closeTab(t))
+            --t;
+        else
+            break;
+    }
+}
+
+void AppWindow::on_actionClose_Saved_triggered()
+{
+    for (int t = 0; t < ui->tabWidget->count(); t++)
+        if (!windowIndex(t)->isTextChanged() && closeTab(t))
+            --t;
 }
 
 /************************ PREFERENCES SECTION **********************/
@@ -414,6 +608,39 @@ void AppWindow::on_actionSettings_triggered()
 
 /************************** SLOTS *********************************/
 
+#define FROMJSON(x) auto x = json[#x]
+
+void AppWindow::onReceivedMessage(quint32 instanceId, QByteArray message)
+{
+    message = message.mid(message.indexOf("NOLOSTDATA") + 10);
+    auto json = QJsonDocument::fromBinaryData(message);
+    FROMJSON(cpp).toBool();
+    FROMJSON(java).toBool();
+    FROMJSON(python).toBool();
+
+    if (json["type"] == "normal")
+    {
+        FROMJSON(depth).toInt();
+        FROMJSON(paths).toVariant().toStringList();
+        openPaths(paths);
+    }
+    else if (json["type"] == "contest")
+    {
+        FROMJSON(number).toInt();
+        FROMJSON(path).toString();
+        QString lang = settingManager->getDefaultLang();
+        if (cpp)
+            lang = "C++";
+        else if (java)
+            lang = "Java";
+        else if (python)
+            lang = "Python";
+        openContest(path, lang, number);
+    }
+}
+
+#undef FROMJSON
+
 void AppWindow::onTabCloseRequested(int index)
 {
     closeTab(index);
@@ -433,10 +660,7 @@ void AppWindow::onTabChanged(int index)
 
     auto tmp = windowIndex(index);
 
-    if (tmp->isUntitled())
-        setWindowTitle(tmp->getFileName() + " - CP Editor");
-    else
-        setWindowTitle(tmp->getFilePath() + " - CP Editor");
+    setWindowTitle(tmp->getTabTitle(true, false) + " - CP Editor");
 
     activeLogger = tmp->getLogger();
     server->setMessageLogger(activeLogger);
@@ -458,28 +682,25 @@ void AppWindow::onTabChanged(int index)
         connect(tmp->getSplitter(), SIGNAL(splitterMoved(int, int)), this, SLOT(onSplitterMoved(int, int)));
 }
 
-void AppWindow::onEditorChanged(MainWindow *widget)
+void AppWindow::onEditorChanged()
 {
-    if (widget != nullptr && widget == currentWindow())
+    if (currentWindow() != nullptr)
     {
-        if (widget->isUntitled())
-            setWindowTitle(widget->getFileName() + " - CP Editor");
-        else
-            setWindowTitle(widget->getFilePath() + " - CP Editor");
-    }
+        setWindowTitle(currentWindow()->getTabTitle(true, false) + " - CP Editor");
 
-    QMap<QString, QVector<int>> tabsByName;
+        QMap<QString, QVector<int>> tabsByName;
 
-    for (int t = 0; t < ui->tabWidget->count(); ++t)
-    {
-        tabsByName[windowIndex(t)->getFileName()].push_back(t);
-    }
-
-    for (auto tabs : tabsByName)
-    {
-        for (auto index : tabs)
+        for (int t = 0; t < ui->tabWidget->count(); ++t)
         {
-            ui->tabWidget->setTabText(index, windowIndex(index)->getTabTitle(tabs.size() > 1));
+            tabsByName[windowIndex(t)->getTabTitle(false, false)].push_back(t);
+        }
+
+        for (auto tabs : tabsByName)
+        {
+            for (auto index : tabs)
+            {
+                ui->tabWidget->setTabText(index, windowIndex(index)->getTabTitle(tabs.size() > 1, true));
+            }
         }
     }
 }
@@ -491,7 +712,7 @@ void AppWindow::onSaveTimerElapsed()
         auto tmp = windowIndex(t);
         if (!tmp->isUntitled())
         {
-            tmp->save(false);
+            tmp->save(false, "Auto Save");
         }
     }
 }
@@ -510,13 +731,13 @@ void AppWindow::onSettingsApplied()
             connect(server, &Network::CompanionServer::onRequestArrived, this, &AppWindow::onIncomingCompanionRequest);
     diagonistics = true;
     onTabChanged(ui->tabWidget->currentIndex());
-    onEditorChanged(currentWindow());
+    onEditorChanged();
 }
 
 void AppWindow::onIncomingCompanionRequest(Network::CompanionData data)
 {
-    openTab(data.url, true);
-    int current = ui->tabWidget->currentIndex();
+    if (settingManager->isCompetitiveCompanionOpenNewTab() || currentWindow() == nullptr)
+        openTab(data.url, true);
     currentWindow()->applyCompanion(data);
 }
 
@@ -553,38 +774,50 @@ void AppWindow::on_actionCheck_for_updates_triggered()
 
 void AppWindow::on_actionCompile_triggered()
 {
-    if (ui->actionEditor_Mode->isChecked())
-        on_actionSplit_Mode_triggered();
-    currentWindow()->compileOnly();
+    if (currentWindow() != nullptr)
+    {
+        if (ui->actionEditor_Mode->isChecked())
+            on_actionSplit_Mode_triggered();
+        currentWindow()->compileOnly();
+    }
 }
 
 void AppWindow::on_actionCompile_Run_triggered()
 {
-    if (ui->actionEditor_Mode->isChecked())
-        on_actionSplit_Mode_triggered();
-    currentWindow()->compileAndRun();
+    if (currentWindow() != nullptr)
+    {
+        if (ui->actionEditor_Mode->isChecked())
+            on_actionSplit_Mode_triggered();
+        currentWindow()->compileAndRun();
+    }
 }
 
 void AppWindow::on_actionRun_triggered()
 {
-    if (ui->actionEditor_Mode->isChecked())
-        on_actionSplit_Mode_triggered();
-    currentWindow()->runOnly();
+    if (currentWindow() != nullptr)
+    {
+        if (ui->actionEditor_Mode->isChecked())
+            on_actionSplit_Mode_triggered();
+        currentWindow()->runOnly();
+    }
 }
 
 void AppWindow::on_actionFormat_code_triggered()
 {
-    currentWindow()->formatSource();
+    if (currentWindow() != nullptr)
+        currentWindow()->formatSource();
 }
 
 void AppWindow::on_actionRun_Detached_triggered()
 {
-    currentWindow()->detachedExecution();
+    if (currentWindow() != nullptr)
+        currentWindow()->detachedExecution();
 }
 
 void AppWindow::on_actionKill_Processes_triggered()
 {
-    currentWindow()->killProcesses();
+    if (currentWindow() != nullptr)
+        currentWindow()->killProcesses();
 }
 
 void AppWindow::on_actionUse_Snippets_triggered()
@@ -596,8 +829,8 @@ void AppWindow::on_actionUse_Snippets_triggered()
         auto names = settingManager->getSnippetsNames(lang);
         if (names.isEmpty())
         {
-            activeLogger->warn("Snippets", "There are no snippets for " + lang.toStdString() +
-                                               ". Please add snippets in the preference window.");
+            activeLogger->warn("Snippets",
+                               "There are no snippets for " + lang + ". Please add snippets in the preference window.");
         }
         else
         {
@@ -612,8 +845,7 @@ void AppWindow::on_actionUse_Snippets_triggered()
                 }
                 else
                 {
-                    activeLogger->warn("Snippets", "There is no snippet named " + name.toStdString() + " for " +
-                                                       lang.toStdString());
+                    activeLogger->warn("Snippets", "There is no snippet named " + name + " for " + lang);
                 }
             }
         }
@@ -626,7 +858,8 @@ void AppWindow::on_actionEditor_Mode_triggered()
     ui->actionEditor_Mode->setChecked(true);
     ui->actionIO_Mode->setChecked(false);
     ui->actionSplit_Mode->setChecked(false);
-    currentWindow()->getSplitter()->setSizes({1, 0});
+    if (currentWindow() != nullptr)
+        currentWindow()->getSplitter()->setSizes({1, 0});
 }
 
 void AppWindow::on_actionIO_Mode_triggered()
@@ -635,7 +868,8 @@ void AppWindow::on_actionIO_Mode_triggered()
     ui->actionEditor_Mode->setChecked(false);
     ui->actionIO_Mode->setChecked(true);
     ui->actionSplit_Mode->setChecked(false);
-    currentWindow()->getSplitter()->setSizes({0, 1});
+    if (currentWindow() != nullptr)
+        currentWindow()->getSplitter()->setSizes({0, 1});
 }
 
 void AppWindow::on_actionSplit_Mode_triggered()
@@ -645,7 +879,8 @@ void AppWindow::on_actionSplit_Mode_triggered()
     ui->actionIO_Mode->setChecked(false);
     ui->actionSplit_Mode->setChecked(true);
     auto state = settingManager->getSplitterSizes();
-    currentWindow()->getSplitter()->restoreState(state);
+    if (currentWindow() != nullptr)
+        currentWindow()->getSplitter()->restoreState(state);
 }
 
 void AppWindow::on_confirmTriggered(MainWindow *widget)
@@ -653,6 +888,136 @@ void AppWindow::on_confirmTriggered(MainWindow *widget)
     int index = ui->tabWidget->indexOf(widget);
     if (index != -1)
         ui->tabWidget->setCurrentIndex(index);
+}
+
+void AppWindow::onTabContextMenuRequested(const QPoint &pos)
+{
+    int index = ui->tabWidget->tabBar()->tabAt(pos);
+    if (index != -1)
+    {
+        auto widget = windowIndex(index);
+        auto menu = new QMenu();
+        menu->addAction("Close", [index, this] { closeTab(index); });
+        menu->addAction("Close Others", [widget, this] {
+            for (int i = 0; i < ui->tabWidget->count(); ++i)
+                if (windowIndex(i) != widget && closeTab(i))
+                    --i;
+        });
+        menu->addAction("Close to the Left", [widget, this] {
+            for (int i = 0; i < ui->tabWidget->count() && windowIndex(i) != widget; ++i)
+                if (closeTab(i))
+                    --i;
+        });
+        menu->addAction("Close to the Right", [index, this] {
+            for (int i = index + 1; i < ui->tabWidget->count(); ++i)
+                if (closeTab(i))
+                    --i;
+        });
+        menu->addAction("Close Saved", [this] { on_actionClose_Saved_triggered(); });
+        menu->addAction("Close All", [this] { on_actionClose_All_triggered(); });
+        QString filePath = widget->getFilePath();
+        if (!widget->isUntitled() && QFile::exists(filePath))
+        {
+            menu->addSeparator();
+            menu->addAction("Copy path", [filePath] {
+                auto clipboard = QGuiApplication::clipboard();
+                clipboard->setText(filePath);
+            });
+            // Reference: http://lynxline.com/show-in-finder-show-in-explorer/ and https://forum.qt.io/post/296072
+#if defined(Q_OS_MACOS)
+            menu->addAction("Reveal in Finder", [filePath] {
+                QStringList args;
+                args << "-e";
+                args << "tell application \"Finder\"";
+                args << "-e";
+                args << "activate";
+                args << "-e";
+                args << "select POSIX file \"" + filePath + "\"";
+                args << "-e";
+                args << "end tell";
+                QProcess::startDetached("osascript", args);
+            });
+#elif defined(Q_OS_WIN)
+            menu->addAction("Reveal in Explorer", [filePath] {
+                QStringList args;
+                args << "/select," << QDir::toNativeSeparators(filePath);
+                QProcess::startDetached("explorer", args);
+            });
+#elif defined(Q_OS_UNIX)
+            QProcess proc;
+            proc.start("xdg-mime", QStringList() << "query"
+                                                 << "default"
+                                                 << "inode/directory");
+            auto finished = proc.waitForFinished(2000);
+            if (finished)
+            {
+                auto output = proc.readLine().simplified();
+                QString program;
+                QStringList args;
+                auto nativePath = QUrl::fromLocalFile(filePath).toString();
+                if (output == "dolphin.desktop" || output == "org.kde.dolphin.desktop")
+                {
+                    program = "dolphin";
+                    args << "--select" << nativePath;
+                }
+                else if (output == "nautilus.desktop" || output == "org.gnome.Nautilus.desktop" ||
+                         output == "nautilus-folder-handler.desktop")
+                {
+                    program = "nautilus";
+                    args << "--no-desktop" << nativePath;
+                }
+                else if (output == "caja-folder-handler.desktop")
+                {
+                    program = "caja";
+                    args << "--no-desktop" << nativePath;
+                }
+                else if (output == "nemo.desktop")
+                {
+                    program = "nemo";
+                    args << "--no-desktop" << nativePath;
+                }
+                else if (output == "kfmclient_dir.desktop")
+                {
+                    program = "konqueror";
+                    args << "--select" << nativePath;
+                }
+                if (program.isEmpty())
+                {
+                    menu->addAction("Open Containing Folder", [filePath] {
+                        QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(filePath).path()));
+                    });
+                }
+                else
+                {
+                    menu->addAction("Reveal in File Manager", [program, args] {
+                        QProcess openProcess;
+                        openProcess.startDetached(program, args);
+                    });
+                }
+            }
+            else
+            {
+                menu->addAction("Open Containing Folder", [filePath] {
+                    QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(filePath).path()));
+                });
+            }
+#else
+            menu->addAction("Open Containing Folder",
+                            [filePath] { QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(filePath).path())); });
+#endif
+        }
+        else if (!widget->isUntitled() && QFile::exists(QFileInfo(widget->getFilePath()).path()))
+        {
+            menu->addSeparator();
+            menu->addAction("Copy path", [filePath] {
+                auto clipboard = QGuiApplication::clipboard();
+                clipboard->setText(filePath);
+            });
+            menu->addAction("Open Containing Folder",
+                            [filePath] { QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(filePath).path())); });
+        }
+        menu->popup(ui->tabWidget->tabBar()->mapToGlobal(pos));
+    }
 }
 
 MainWindow *AppWindow::currentWindow()

@@ -49,19 +49,37 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
   public:
-    const int untitledIndex;
+    struct EditorStatus
+    {
+        bool isLanguageSet;
+        QString filePath, savedText, problemURL, editorText, language;
+        int editorCursor, editorAnchor, horizontalScrollBarValue, verticalScrollbarValue, untitledIndex;
+        QStringList input, expected;
+
+        EditorStatus(){};
+
+        EditorStatus(const QMap<QString, QVariant> &status);
+
+        QMap<QString, QVariant> toMap() const;
+    };
 
     MainWindow(QString fileOpen, const Settings::SettingsData &data, int index = 0, QWidget *parent = nullptr);
     ~MainWindow() override;
 
+    int getUntitledIndex() const;
     QString getFileName() const;
     QString getFilePath() const;
     QString getProblemURL() const;
-    QString getTabTitle(bool complete);
+    QString getTabTitle(bool complete, bool star);
     bool isUntitled() const;
-    void save(bool force);
+
+    EditorStatus toStatus() const;
+    void loadStatus(const EditorStatus &status);
+
+    void save(bool force, const QString &head);
     void saveAs();
 
+    bool isTextChanged();
     bool closeConfirm();
 
     void killProcesses();
@@ -85,8 +103,6 @@ class MainWindow : public QMainWindow
     void focusOnEditor();
 
   private slots:
-    void onTextChangedTriggered();
-
     void on_compile_clicked();
     void on_runOnly_clicked();
     void on_run_clicked();
@@ -118,7 +134,7 @@ class MainWindow : public QMainWindow
     void onFileWatcherChanged(const QString &);
 
   signals:
-    void editorChanged(MainWindow *widget);
+    void editorChanged();
     void confirmTriggered(MainWindow *widget);
 
   private:
@@ -156,9 +172,11 @@ class MainWindow : public QMainWindow
 
     MessageLogger log;
 
+    int untitledIndex;
     QString problemURL;
     QString filePath;
     QString savedText;
+    QString cftoolPath;
     QFileSystemWatcher *fileWatcher;
 
     QVector<QPlainTextEdit *> input = QVector<QPlainTextEdit *>(3, nullptr);
@@ -177,15 +195,14 @@ class MainWindow : public QMainWindow
     void saveTests();
     void setCFToolsUI();
     void updateVerdict(Verdict, int);
-    bool isTextChanged();
     bool isVerdictPass(QString, QString);
     void setText(const QString &text, bool saveCursor = false);
     void updateWatcher();
     void loadFile(QString path);
-    bool saveFile(SaveMode, std::string);
-    bool saveTemp(std::string);
+    bool saveFile(SaveMode, const QString &head);
+    bool saveTemp(const QString &head);
     QString tmpPath();
     void performCoreDiagonistics();
-    std::string getRunnerHead(int index);
+    QString getRunnerHead(int index);
 };
 #endif // MAINWINDOW_HPP

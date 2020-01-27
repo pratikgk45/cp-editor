@@ -12,9 +12,10 @@
 - One click for either running on the test cases / running in the terminal.
 - Submit code on Codeforces inside the editor.
 - Set/Use code snippets conveniently.
-- Fast and memory efficient. Runs flawlessly on low-end devices.
+- Supports Hot Exit. You can close the editor and keep all tabs in the next session.
 - Code formating using clang-format. You can edit the `.clang-format` config in the editor.
-- Customizable hotkeys for actions in the editor.
+- You can set transparency of the editor.
+- Fast and memory efficient. Runs flawlessly on low-end devices.
 - Over 5 editor themes to choose from (Drakula, Monkai, Solarised, Solarised Dark and Light).
 
 <img src=https://i.imgur.com/jKOtf6W.jpg width="85%">
@@ -63,9 +64,9 @@ You can also set hotkeys for some actions manually in `Preferences`. However the
 	git submodule update
 	```
 
-2. Install Qt (5.12 or higher) and CMake.
+2. Install Qt (5.12 or higher) and CMake. On Mac, run `brew install qt5`.
 
-3. Set environment variable `CMAKE_PREFIX_PATH=%QtPath%/%QtVersion%/%Compiler%/lib/cmake`. (Only necessary in some systems)
+3. Set environment variable `CMAKE_PREFIX_PATH=%QtPath%/%QtVersion%/%Compiler%/lib/cmake` if necessary (i.e. cmake can't find the Qt installation path.) On Mac, run `export CMAKE_PREFIX_PATH="/usr/local/Cellar/qt/5.13.0"`.
 
 4. Run the following commands:
 	

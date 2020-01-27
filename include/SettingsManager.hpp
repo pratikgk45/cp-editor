@@ -89,6 +89,8 @@ struct SettingsData
 
     ViewMode viewMode;
     QByteArray splitterSizes;
+
+    QString cfPath;
 };
 
 class SettingManager
@@ -170,8 +172,14 @@ class SettingManager
     bool isSaveTests();
     void setSaveTests(bool value);
 
+    bool isUseHotExit();
+    void setUseHotExit(bool value);
+
     bool isCompetitiveCompanionActive();
     void setCompetitiveCompanionActive(bool value);
+
+    bool isCompetitiveCompanionOpenNewTab();
+    void setCompetitiveCompanionOpenNewTab(bool value);
 
     bool isMaximizedWindow();
     void setMaximizedWindow(bool value);
@@ -181,6 +189,9 @@ class SettingManager
 
     bool isFormatOnSave();
     void formatOnSave(bool value);
+
+    int getTransparency();
+    void setTransparency(int val);
 
     ViewMode getViewMode();
     void setViewMode(ViewMode v);
@@ -207,6 +218,17 @@ class SettingManager
     void setSnippet(QString lang, QString name, QString content);
     void removeSnippet(QString lang, QString name);
     QStringList getSnippetsNames(QString lang);
+
+    int getNumberOfTabs();
+    void setNumberOfTabs(int value);
+    int getCurrentIndex();
+    void setCurrentIndex(int index);
+    void clearEditorStatus();
+    QMap<QString, QVariant> getEditorStatus(int index);
+    void setEditorStatus(int index, const QMap<QString, QVariant> &status);
+
+    QString getCFPath();
+    void setCFPath(QString path);
 
     void resetSettings();
 
