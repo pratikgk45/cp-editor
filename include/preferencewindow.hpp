@@ -20,6 +20,7 @@
 
 #include "SettingsManager.hpp"
 #include <Qsci/qsciscintilla.h>
+#include <QCodeEditor>
 #include <QListWidget>
 #include <QMainWindow>
 
@@ -84,6 +85,9 @@ class PreferenceWindow : public QMainWindow
     QString cppTemplatePath, pythonTemplatePath, javaTemplatePath;
     Settings::SettingManager *manager;
     QsciScintilla *editor = nullptr; // for snippets
+	QCodeEditor* oldEditor = nullptr; // for old editor
+
+	bool useQcodeEditor = false;
 
     void extractSettingsFromUi();
     void applySettingsToui();

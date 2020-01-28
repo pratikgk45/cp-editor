@@ -32,10 +32,10 @@
 
 #include <QDebug>
 
+#include <Qsci/qsciapis.h>
 #include <Qsci/qscilexercpp.h>
 #include <Qsci/qscilexerjava.h>
 #include <Qsci/qscilexerpython.h>
-#include <Qsci/qsciapis.h>
 
 PreferenceWindow::PreferenceWindow(Settings::SettingManager *manager, QWidget *parent)
     : QMainWindow(parent), ui(new Ui::PreferenceWindow)
@@ -45,6 +45,10 @@ PreferenceWindow::PreferenceWindow(Settings::SettingManager *manager, QWidget *p
     setWindowTitle("Preferences");
 
     editor = new QsciScintilla();
+    oldEditor = new QCodeEditor();
+
+	useQcodeEditor = !manager->useScintilla();
+
     editor->setMarginType(1, QsciScintilla::MarginType::NumberMargin);
     editor->setMarginWidth(1, "000");
     editor->setFolding(QsciScintilla::FoldStyle::BoxedTreeFoldStyle);
@@ -56,8 +60,11 @@ PreferenceWindow::PreferenceWindow(Settings::SettingManager *manager, QWidget *p
     editor->setAutoCompletionCaseSensitivity(true);
 
     editor->SendScintilla(QsciScintilla::SCI_SETHSCROLLBAR, 0);
-
-    ui->verticalLayout_3->insertWidget(0, editor);
+    
+	if (useQcodeEditor)
+        ui->verticalLayout_3->insertWidget(0, oldEditor);
+    else
+        ui->verticalLayout_3->insertWidget(0, editor);
 
     connect(ui->snippets, SIGNAL(currentTextChanged(const QString &)), this,
             SLOT(onCurrentSnippetChanged(const QString &)));
@@ -391,15 +398,28 @@ void PreferenceWindow::onSnippetsLangChanged(const QString &lang)
 {
     updateSnippets();
     if (lang == "Python")
+    {
+        oldEditor->setHighlighter(new QPythonHighlighter);
+        oldEditor->setCompleter(new QPythonCompleter);
 
         editor->setLexer(new QsciLexerPython);
+    }
 
     else if (lang == "Java")
+    {
+        oldEditor->setHighlighter(new QCXXHighlighter);
+        oldEditor->setCompleter(nullptr);
 
         editor->setLexer(new QsciLexerJava);
+    }
 
     else
+    {
+        oldEditor->setHighlighter(new QCXXHighlighter);
+        oldEditor->setCompleter(nullptr);
+
         editor->setLexer(new QsciLexerCPP);
+    }
 
     // Lexer reset the colors
     editor->setUnmatchedBraceForegroundColor(Qt::red);
@@ -408,15 +428,23 @@ void PreferenceWindow::onSnippetsLangChanged(const QString &lang)
     editor->setBraceMatching(QsciScintilla::BraceMatch::SloppyBraceMatch);
 
     // Todo: Everything except the CallTips is working.
-
 }
 
 void PreferenceWindow::onCurrentSnippetChanged(const QString &text)
 {
     auto lang = ui->snippets_lang->currentText();
     auto content = manager->getSnippet(lang, text);
-    editor->setText(content);
-    editor->setFocus(Qt::OtherFocusReason);
+
+    if (useQcodeEditor)
+    {
+        oldEditor->setFocus(Qt::OtherFocusReason);
+        oldEditor->setPlainText(content);
+    }
+    else
+    {
+        editor->setText(content);
+        editor->setFocus(Qt::OtherFocusReason);
+    }
 }
 
 void PreferenceWindow::applySettingsToEditor()
@@ -426,34 +454,50 @@ void PreferenceWindow::applySettingsToEditor()
     editor->setTabIndents(data.isTabsReplaced);
     editor->setTabWidth(data.tabStop);
     editor->setAutoIndent(data.isAutoIndent);
-    //    editor->setAutoParentheses(data.isAutoParenthesis); // No longer in scintilla
+
+    oldEditor->setTabReplace(data.isTabsReplaced);
+    oldEditor->setTabReplaceSize(data.tabStop);
+    oldEditor->setAutoIndentation(data.isAutoIndent);
+    oldEditor->setAutoParentheses(data.isAutoParenthesis);
 
     if (!data.font.isEmpty())
     {
         QFont font;
         font.fromString(data.font);
         editor->setFont(font);
+        oldEditor->setFont(font);
     }
 
     editor->setTabWidth(data.tabStop);
+    const int tabStop = data.tabStop;
+
+    QFontMetrics metric(editor->font());
+    oldEditor->setTabReplaceSize(tabStop);
+    oldEditor->setTabStopDistance(tabStop * metric.horizontalAdvance("9"));
 
     if (data.isWrapText)
+    {
         editor->setWrapMode(QsciScintilla::WrapMode::WrapWord);
+        oldEditor->setWordWrapMode(QTextOption::WordWrap);
+    }
     else
+    {
         editor->setWrapMode(QsciScintilla::WrapMode::WrapNone);
+        oldEditor->setWordWrapMode(QTextOption::NoWrap);
+    }
 
-    //    if (data.editorTheme == "Light")
-    //        editor->setSyntaxStyle(Themes::EditorTheme::getLightTheme());
-    //    else if (data.editorTheme == "Drakula")
-    //        editor->setSyntaxStyle(Themes::EditorTheme::getDrakulaTheme());
-    //    else if (data.editorTheme == "Monkai")
-    //        editor->setSyntaxStyle(Themes::EditorTheme::getMonkaiTheme());
-    //    else if (data.editorTheme == "Solarised")
-    //        editor->setSyntaxStyle(Themes::EditorTheme::getSolarisedTheme());
-    //    else if (data.editorTheme == "Solarised Dark")
-    //        editor->setSyntaxStyle(Themes::EditorTheme::getSolarisedDarkTheme());
-    //    else
-    //        editor->setSyntaxStyle(Themes::EditorTheme::getLightTheme());
+    if (data.editorTheme == "Light")
+        oldEditor->setSyntaxStyle(Themes::EditorTheme::getLightTheme());
+    else if (data.editorTheme == "Drakula")
+        oldEditor->setSyntaxStyle(Themes::EditorTheme::getDrakulaTheme());
+    else if (data.editorTheme == "Monkai")
+        oldEditor->setSyntaxStyle(Themes::EditorTheme::getMonkaiTheme());
+    else if (data.editorTheme == "Solarised")
+        oldEditor->setSyntaxStyle(Themes::EditorTheme::getSolarisedTheme());
+    else if (data.editorTheme == "Solarised Dark")
+        oldEditor->setSyntaxStyle(Themes::EditorTheme::getSolarisedDarkTheme());
+    else
+        oldEditor->setSyntaxStyle(Themes::EditorTheme::getLightTheme());
 }
 
 void PreferenceWindow::on_snippet_save_clicked()
@@ -462,14 +506,18 @@ void PreferenceWindow::on_snippet_save_clicked()
     if (ui->snippets->currentIndex() != -1)
     {
         auto name = ui->snippets->currentText();
-        manager->setSnippet(lang, name, editor->text());
+        manager->setSnippet(lang, name, useQcodeEditor ? oldEditor->toPlainText() : editor->text());
     }
     else
     {
         auto name = getNewSnippetName(lang);
         if (!name.isEmpty())
         {
-            auto content = editor->text();
+            QString content;
+            if (useQcodeEditor)
+                content = oldEditor->toPlainText();
+            else
+                content = editor->text();
             manager->setSnippet(lang, name, content);
             switchToSnippet(name);
         }
@@ -511,7 +559,13 @@ void PreferenceWindow::on_snippet_rename_clicked()
         auto name = getNewSnippetName(lang);
         if (!name.isEmpty())
         {
-            auto content = editor->text();
+            QString content;
+
+            if (useQcodeEditor)
+                content = oldEditor->toPlainText();
+            else
+                content = editor->text();
+
             auto currentName = ui->snippets->currentText();
             manager->removeSnippet(lang, currentName);
             manager->setSnippet(lang, name, content);

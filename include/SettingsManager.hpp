@@ -78,6 +78,7 @@ struct SettingsData
     bool isCheckUpdateOnStartup;
     bool isUpdateCheckOnStartup;
     bool isFormatOnSave;
+    bool useScintilla;
 
     QKeySequence hotkeyRun;
     QKeySequence hotkeyCompile;
@@ -189,6 +190,9 @@ class SettingManager
 
     bool isFormatOnSave();
     void formatOnSave(bool value);
+
+	bool useScintilla();
+    void setUseScintilla(bool value);
 
     int getTransparency();
     void setTransparency(int val);

@@ -289,6 +289,19 @@ void SettingManager::formatOnSave(bool value)
         mSettings->setValue("format_on_save", QString::fromStdString("false"));
 }
 
+bool SettingManager::useScintilla()
+{
+    return mSettings->value("use_scintilla", false).toBool();
+}
+
+void SettingManager::setUseScintilla(bool value)
+{
+    if (value)
+        mSettings->setValue("use_scintilla", QString::fromStdString("true"));
+    else
+        mSettings->setValue("use_scintilla", QString::fromStdString("false"));
+}
+
 void SettingManager::setTabStop(int num)
 {
     mSettings->setValue("tab_stop", num);
@@ -587,6 +600,7 @@ SettingsData SettingManager::toData()
     data.viewMode = getViewMode();
     data.splitterSizes = getSplitterSizes();
     data.cfPath = getCFPath();
+    data.useScintilla = useScintilla();
 
     return data;
 }
