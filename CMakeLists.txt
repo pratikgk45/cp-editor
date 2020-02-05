@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(CPEditor LANGUAGES CXX VERSION 5.7.1)
+project(CPEditor LANGUAGES CXX VERSION 5.9.1)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -16,6 +16,7 @@ if(WIN32)
 endif()
 if(APPLE)
     SET(GUI_TYPE MACOSX_BUNDLE)
+    configure_file(.ci/mac/Info.plist.in ${CMAKE_BINARY_DIR}/generated/Info.plist)
 endif()
 
 
@@ -33,46 +34,45 @@ configure_file(version.hpp.in ${CMAKE_BINARY_DIR}/generated/version.hpp)
 add_executable(CPEditor
     ${GUI_TYPE}
 
+    include/Core/Compiler.hpp
+    include/Core/Runner.hpp
+    include/Core/Formatter.hpp
+    include/Core/SettingsManager.hpp
+    include/Core/MessageLogger.hpp
+    src/Core/Compiler.cpp
+    src/Core/Runner.cpp
+    src/Core/Formatter.cpp
+    src/Core/SettingsManager.cpp
+    src/Core/MessageLogger.cpp
+
+    include/Telemetry/UpdateNotifier.hpp
+    src/Telemetry/UpdateNotifier.cpp
+
+    include/Widgets/TestCases.hpp
+    src/Widgets/TestCases.cpp
+
+    include/Extensions/CompanionServer.hpp
+    include/Extensions/CFTools.hpp
+    include/Extensions/EditorTheme.hpp
+    src/Extensions/CompanionServer.cpp
+    src/Extensions/CFTools.cpp
+    src/Extensions/EditorTheme.cpp
+
     include/mainwindow.hpp
-    include/MessageLogger.hpp
-    include/SettingsManager.hpp
-    include/Compiler.hpp
-    include/IO.hpp
-    include/BaseFiles.hpp
-    include/UpdateNotifier.hpp
-    include/Runner.hpp
-    include/Formatter.hpp
-    include/expand.hpp
-    include/CompanionServer.hpp
-    include/cftools.hpp
-    include/EditorTheme.hpp
     include/preferencewindow.hpp
     include/appwindow.hpp
-    include/DiffViewer.hpp
-
-
-    src/mainwindow.cc
-    src/MessageLogger.cpp
-    src/SettingsManager.cpp
-    src/main.cc
-    src/Compiler.cpp
-    src/IO.cpp
-    src/UpdateNotifier.cpp
-    src/Runner.cpp
-    src/Formatter.cpp
-    src/expand.cpp
-    src/CompanionServer.cpp
-    src/cftools.cpp
-    src/editortheme.cpp
+    src/mainwindow.cpp
     src/preferencewindow.cpp
     src/appwindow.cpp
-    src/DiffViewer.cpp
 
-    ui/expand.ui
+    third_party/diff_match_patch/diff_match_patch.h
+    third_party/diff_match_patch/diff_match_patch.cpp
+
+    src/main.cpp
+
     ui/mainwindow.ui
     ui/preferencewindow.ui
     ui/appwindow.ui
-    ui/diffviewer.ui
 
     ${CMAKE_BINARY_DIR}/generated/version.hpp
 
@@ -81,6 +81,7 @@ add_executable(CPEditor
 
 include_directories("third_party/QCodeEditor/include")
 include_directories("third_party/QScintilla/Qt4Qt5")
+include_directories("third_party/diff_match_patch")
 include_directories("include/")
 include_directories("generated/")
 

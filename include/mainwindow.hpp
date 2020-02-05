@@ -18,10 +18,9 @@
 #ifndef MAINWINDOW_HPP
 #define MAINWINDOW_HPP
 
-#include <CompanionServer.hpp>
-#include <Compiler.hpp>
-#include <Formatter.hpp>
-#include <IO.hpp>
+#include "Extensions/CompanionServer.hpp"
+#include "Core/Compiler.hpp"
+#include "Core/Formatter.hpp"
 #include <QCodeEditor>
 #include <QFile>
 #include <QFileSystemWatcher>
@@ -31,10 +30,11 @@
 #include <QShortcut>
 #include <QSplitter>
 #include <QTemporaryDir>
-#include <Runner.hpp>
-#include <SettingsManager.hpp>
-#include <UpdateNotifier.hpp>
-#include <cftools.hpp>
+#include "Core/Runner.hpp"
+#include "Core/SettingsManager.hpp"
+#include "Widgets/TestCases.hpp"
+#include "Telemetry/UpdateNotifier.hpp"
+#include "Extensions/CFTools.hpp"
 #include <generated/version.hpp>
 
 QT_BEGIN_NAMESPACE
@@ -71,7 +71,10 @@ class MainWindow : public QMainWindow
     QString getFilePath() const;
     QString getProblemURL() const;
     QString getTabTitle(bool complete, bool star);
+    QCodeEditor *getEditor() const;
     bool isUntitled() const;
+
+    void setProblemURL(const QString &url);
 
     EditorStatus toStatus() const;
     void loadStatus(const EditorStatus &status);
@@ -97,6 +100,7 @@ class MainWindow : public QMainWindow
 
     MessageLogger *getLogger();
     QSplitter *getSplitter();
+    QSplitter *getRightSplitter();
 
     void insertText(QString text);
 
@@ -117,21 +121,11 @@ class MainWindow : public QMainWindow
     void onRunTimeout(int index);
     void onRunKilled(int index);
 
-    void on_in1_customContextMenuRequested(const QPoint &pos);
-    void on_in2_customContextMenuRequested(const QPoint &pos);
-    void on_in3_customContextMenuRequested(const QPoint &pos);
-    void on_compiler_edit_customContextMenuRequested(const QPoint &pos);
-    void on_out3_customContextMenuRequested(const QPoint &pos);
-    void on_out2_customContextMenuRequested(const QPoint &pos);
-    void on_out1_customContextMenuRequested(const QPoint &pos);
-
-    void on_out1_diff_clicked();
-    void on_out2_diff_clicked();
-    void on_out3_diff_clicked();
-
     void on_changeLanguageButton_clicked();
 
     void onFileWatcherChanged(const QString &);
+
+    void updateCursorInfo();
 
   signals:
     void editorChanged();
@@ -165,7 +159,7 @@ class MainWindow : public QMainWindow
 
     Core::Formatter *formatter = nullptr;
     Core::Compiler *compiler = nullptr;
-    QVector<Core::Runner *> runner = QVector<Core::Runner *>(3, nullptr);
+    QVector<Core::Runner *> runner;
     Core::Runner *detachedRunner = nullptr;
     QTemporaryDir *tmpDir = nullptr;
     AfterCompile afterCompile = Nothing;
@@ -179,24 +173,20 @@ class MainWindow : public QMainWindow
     QString cftoolPath;
     QFileSystemWatcher *fileWatcher;
 
-    QVector<QPlainTextEdit *> input = QVector<QPlainTextEdit *>(3, nullptr);
-    QVector<QPlainTextEdit *> output = QVector<QPlainTextEdit *>(3, nullptr);
-    QVector<QLabel *> verdict = QVector<QLabel *>(3, nullptr);
-    QVector<QString *> expected = QVector<QString *>(3, nullptr);
     QPushButton *submitToCodeforces = nullptr;
     Network::CFTools *cftools = nullptr;
 
+    TestCases *testcases = nullptr;
+
+    void setTestCases();
     void setEditor();
     void setupCore();
     void compile();
     void run();
-    void clearTests(bool outputOnly = false);
     void loadTests();
     void saveTests();
     void setCFToolsUI();
-    void updateVerdict(Verdict, int);
-    bool isVerdictPass(QString, QString);
-    void setText(const QString &text, bool saveCursor = false);
+    void setText(const QString &text, bool keep = false);
     void updateWatcher();
     void loadFile(QString path);
     bool saveFile(SaveMode, const QString &head);

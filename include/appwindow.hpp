@@ -20,8 +20,8 @@
 
 #include <QMainWindow>
 
-#include "SettingsManager.hpp"
-#include "UpdateNotifier.hpp"
+#include "Core/SettingsManager.hpp"
+#include "Telemetry/UpdateNotifier.hpp"
 #include "mainwindow.hpp"
 #include "preferencewindow.hpp"
 
@@ -94,6 +94,8 @@ class AppWindow : public QMainWindow
 
     void onSplitterMoved(int, int);
 
+    void onRightSplitterMoved(int, int);
+
     void onIncomingCompanionRequest(Network::CompanionData);
 
     void onViewModeToggle();
@@ -118,6 +120,20 @@ class AppWindow : public QMainWindow
 
     void on_actionSplit_Mode_triggered();
 
+    void on_action_indent_triggered();
+
+    void on_action_unindent_triggered();
+
+    void on_action_swap_line_up_triggered();
+
+    void on_action_swap_line_down_triggered();
+
+    void on_action_delete_line_triggered();
+
+    void on_action_toggle_comment_triggered();
+
+    void on_action_toggle_block_comment_triggered();
+
     void on_confirmTriggered(MainWindow *widget);
 
     void onTabContextMenuRequested(const QPoint &pos);
@@ -126,8 +142,9 @@ class AppWindow : public QMainWindow
     Ui::AppWindow *ui;
     MessageLogger *activeLogger = nullptr;
     QTimer *timer = nullptr;
-    QMetaObject::Connection activeSplitterMoveConnections;
-    QMetaObject::Connection companionEditorConnections;
+    QMetaObject::Connection activeSplitterMoveConnection;
+    QMetaObject::Connection activeRightSplitterMoveConnection;
+    QMetaObject::Connection companionEditorConnection;
     Settings::SettingManager *settingManager = nullptr;
     Telemetry::UpdateNotifier *updater = nullptr;
     PreferenceWindow *preferenceWindow = nullptr;

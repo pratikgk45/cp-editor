@@ -18,8 +18,8 @@
 #ifndef PREFERENCEWINDOW_HPP
 #define PREFERENCEWINDOW_HPP
 
-#include "SettingsManager.hpp"
 #include <Qsci/qsciscintilla.h>
+#include "Core/SettingsManager.hpp"
 #include <QCodeEditor>
 #include <QListWidget>
 #include <QMainWindow>

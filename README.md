@@ -1,17 +1,19 @@
 # CP Editor
 
-[![Build Status](https://travis-ci.org/coder3101/cp-editor.svg?branch=master)](https://travis-ci.org/coder3101/cp-editor)
+[![CI: Build Test](https://github.com/coder3101/cp-editor/workflows/CI:%20Build%20Test/badge.svg)](https://github.com/coder3101/cp-editor/actions)
+[![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg)](http://commitizen.github.io/cz-cli/)
 [![Latest Stable](https://img.shields.io/github/v/release/coder3101/cp-editor?label=latest%20stable)](https://github.com/coder3101/cp-editor/releases/latest)
 [![Latest Release](https://img.shields.io/github/v/release/coder3101/cp-editor?include_prereleases&label=latest%20release&sort=semver)](https://github.com/coder3101/cp-editor/releases)
 
 <img src=assets/icon.ico height="80" width="80">
 
-**CP Editor** is a native Qt-based code editor written in C++. It's specially designed for competitive programming, unlike other editors/IDEs which are mainly for developers. It helps you focus on your coding and automates the compilation, executing and testing. It even fetches test cases for you from webpages and submits codes on Codeforces!
+**CP Editor** is a native Qt-based code editor. It's specially designed for competitive programming, unlike other editors/IDEs which are mainly for developers. It helps you focus on your coding and automates the compilation, executing and testing. It even fetches test cases for you from webpages and submits codes on Codeforces!
 
 ### Features
 
 - Parse sample test cases from over 30+ online platforms (including Codeforces, AtCoder, CodeChef, Yandex...), load test cases from files, or type manually.
 - One click for either running on the test cases / running in the terminal.
+- Diff Viewer for the running result.
 - Submit code on Codeforces inside the editor.
 - Set/Use code snippets conveniently.
 - Supports Hot Exit. You can close the editor and keep all tabs in the next session.
@@ -20,7 +22,7 @@
 - Fast and memory efficient. Runs flawlessly on low-end devices.
 - Over 5 editor themes to choose from (Drakula, Monkai, Solarised, Solarised Dark and Light).
 
-<img src=https://i.imgur.com/jKOtf6W.jpg width="85%">
+![screenshot](screenshot.png)
 
 ### Installation
 
@@ -29,7 +31,12 @@ Head over to the [release page](https://github.com/coder3101/cp-editor/releases)
 - Linux users can find an `AppImage`:
   1. `chmod +x <AppImagePath>` or make it executable in GUI by right-clicking on it.
   2. Just run it, either from bash or in GUI.
-- Mac users please install from source for the time being.
+- Get the .dmg file from releases and follow these steps:
+  1. Move the Extracted bundle to `/Applications`
+  2. If you try to open it, it may fail saying that file is damaged. This is because of Mac Gatekeeper. You need to disable gatekeeper for CPEditor
+  3. Open the terminal and `cd /Applications`
+  4. Run `sudo xattr -rd com.apple.quarantine CPEditor.app`. Type in your password and now you can double click to launch the app.
+  > *Note: You may need to click "Yes" to access Filesystem several times. It may also happen that application icon will not be visible.*
 
 For Chinese users who are not convenient to download on Github, there is an [alternative download link](https://pan.wzf2000.top/s/md70l8h0) (it's not guaranteed to be up to date).
 
@@ -66,9 +73,12 @@ You can also set hotkeys for some actions manually in `Preferences`. However the
 	git submodule update
 	```
 
-2. Install Qt (5.12 or higher) and CMake. On Mac, run `brew install qt5`.
+2. Install [Qt](https://www.qt.io/download) (5.12 or higher) and [CMake](https://cmake.org/download/) (3.12 or higher).
+   - If you are using Linux/Mac, you can install from your package manager. For example, `sudo pacman -S qt5` on Arch Linux, `brew install qt5` on Mac OS, `sudo apt-get install qt5-default` on Ubuntu Linux.
+   - You can also download the [offline installer](https://www.qt.io/offline-installers), or download from the [mirrors](https://download.qt.io/static/mirrorlist/). The path from the root of the mirror should be like `/qt/official_releases/qt/5.14/5.14.0/qt-opensource-<platform>-5.14.0.<suffix>` (or other versions).
 
-3. Set environment variable `CMAKE_PREFIX_PATH=%QtPath%/%QtVersion%/%Compiler%/lib/cmake` if necessary (i.e. cmake can't find the Qt installation path.) On Mac, run `export CMAKE_PREFIX_PATH="/usr/local/Cellar/qt/5.13.0"`.
+3. Set environment variable `CMAKE_PREFIX_PATH=%QtPath%/%QtVersion%/%Compiler%/lib/cmake` if necessary (i.e. cmake can't find the Qt installation path.).
+   - On Mac, run something like `export CMAKE_PREFIX_PATH="/usr/local/Cellar/qt/5.14.0"`.
 
 4. Run the following commands:
 	
@@ -97,6 +107,8 @@ If you found any bugs or have any feature requests, please open an issue [here](
 If you want a try on developing, you can install Qt and CMake, then fix bugs / make new features by yourself! After finishing the coding, just open a pull request [here](https://github.com/coder3101/cp-editor/pulls). Don't worry if you are not familiar with Qt / GUI programming, Google is your friend, and Qt is a [well documented](https://doc.qt.io/) library. Don't forget to use `.clang-format` file in the root directory to format the codes.
 
 Contributions are always welcomed. Together we can build a better editor for ourselves.
+
+For more information, please read [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Telegram group
 

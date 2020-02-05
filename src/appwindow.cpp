@@ -17,7 +17,7 @@
 
 #include "appwindow.hpp"
 #include "../ui/ui_appwindow.h"
-#include <EditorTheme.hpp>
+#include "Extensions/EditorTheme.hpp"
 #include <QClipboard>
 #include <QDesktopServices>
 #include <QFileDialog>
@@ -157,7 +157,7 @@ void AppWindow::setConnections()
     connect(preferenceWindow, SIGNAL(settingsApplied()), this, SLOT(onSettingsApplied()));
 
     if (settingManager->isCompetitiveCompanionActive())
-        companionEditorConnections =
+        companionEditorConnection =
             connect(server, &Network::CompanionServer::onRequestArrived, this, &AppWindow::onIncomingCompanionRequest);
 }
 
@@ -612,6 +612,8 @@ void AppWindow::on_actionSettings_triggered()
 
 void AppWindow::onReceivedMessage(quint32 instanceId, QByteArray message)
 {
+    raise();
+
     message = message.mid(message.indexOf("NOLOSTDATA") + 10);
     auto json = QJsonDocument::fromBinaryData(message);
     FROMJSON(cpp).toBool();
@@ -656,7 +658,8 @@ void AppWindow::onTabChanged(int index)
         return;
     }
 
-    disconnect(activeSplitterMoveConnections);
+    disconnect(activeSplitterMoveConnection);
+    disconnect(activeRightSplitterMoveConnection);
 
     auto tmp = windowIndex(index);
 
@@ -678,16 +681,18 @@ void AppWindow::onTabChanged(int index)
     else if (ui->actionSplit_Mode->isChecked())
         on_actionSplit_Mode_triggered();
 
-    activeSplitterMoveConnections =
+    tmp->getRightSplitter()->restoreState(settingManager->getRightSplitterSizes());
+
+    activeSplitterMoveConnection =
         connect(tmp->getSplitter(), SIGNAL(splitterMoved(int, int)), this, SLOT(onSplitterMoved(int, int)));
+    activeRightSplitterMoveConnection =
+        connect(tmp->getRightSplitter(), SIGNAL(splitterMoved(int, int)), this, SLOT(onRightSplitterMoved(int, int)));
 }
 
 void AppWindow::onEditorChanged()
 {
     if (currentWindow() != nullptr)
     {
-        setWindowTitle(currentWindow()->getTabTitle(true, false) + " - CP Editor");
-
         QMap<QString, QVector<int>> tabsByName;
 
         for (int t = 0; t < ui->tabWidget->count(); ++t)
@@ -702,6 +707,8 @@ void AppWindow::onEditorChanged()
                 ui->tabWidget->setTabText(index, windowIndex(index)->getTabTitle(tabs.size() > 1, true));
             }
         }
+
+        setWindowTitle(currentWindow()->getTabTitle(true, false) + " - CP Editor");
     }
 }
 
@@ -722,12 +729,12 @@ void AppWindow::onSettingsApplied()
     updater->setBeta(settingManager->isBeta());
     maybeSetHotkeys();
 
-    disconnect(companionEditorConnections);
+    disconnect(companionEditorConnection);
 
     server->updatePort(settingManager->getConnectionPort());
 
     if (settingManager->isCompetitiveCompanionActive())
-        companionEditorConnections =
+        companionEditorConnection =
             connect(server, &Network::CompanionServer::onRequestArrived, this, &AppWindow::onIncomingCompanionRequest);
     diagonistics = true;
     onTabChanged(ui->tabWidget->currentIndex());
@@ -764,6 +771,12 @@ void AppWindow::onSplitterMoved(int _, int __)
 {
     auto splitter = currentWindow()->getSplitter();
     settingManager->setSplitterSizes(splitter->saveState());
+}
+
+void AppWindow::onRightSplitterMoved(int _, int __)
+{
+    auto splitter = currentWindow()->getRightSplitter();
+    settingManager->setRightSplitterSizes(splitter->saveState());
 }
 
 /************************* ACTIONS ************************/
@@ -883,6 +896,55 @@ void AppWindow::on_actionSplit_Mode_triggered()
         currentWindow()->getSplitter()->restoreState(state);
 }
 
+void AppWindow::on_action_indent_triggered()
+{
+    auto tmp = currentWindow();
+    if (tmp != nullptr)
+        tmp->getEditor()->indent();
+}
+
+void AppWindow::on_action_unindent_triggered()
+{
+    auto tmp = currentWindow();
+    if (tmp != nullptr)
+        tmp->getEditor()->unindent();
+}
+
+void AppWindow::on_action_swap_line_up_triggered()
+{
+    auto tmp = currentWindow();
+    if (tmp != nullptr)
+        tmp->getEditor()->swapLineUp();
+}
+
+void AppWindow::on_action_swap_line_down_triggered()
+{
+    auto tmp = currentWindow();
+    if (tmp != nullptr)
+        tmp->getEditor()->swapLineDown();
+}
+
+void AppWindow::on_action_delete_line_triggered()
+{
+    auto tmp = currentWindow();
+    if (tmp != nullptr)
+        tmp->getEditor()->deleteLine();
+}
+
+void AppWindow::on_action_toggle_comment_triggered()
+{
+    auto tmp = currentWindow();
+    if (tmp != nullptr)
+        tmp->getEditor()->toggleComment();
+}
+
+void AppWindow::on_action_toggle_block_comment_triggered()
+{
+    auto tmp = currentWindow();
+    if (tmp != nullptr)
+        tmp->getEditor()->toggleBlockComment();
+}
+
 void AppWindow::on_confirmTriggered(MainWindow *widget)
 {
     int index = ui->tabWidget->indexOf(widget);
@@ -919,10 +981,7 @@ void AppWindow::onTabContextMenuRequested(const QPoint &pos)
         if (!widget->isUntitled() && QFile::exists(filePath))
         {
             menu->addSeparator();
-            menu->addAction("Copy path", [filePath] {
-                auto clipboard = QGuiApplication::clipboard();
-                clipboard->setText(filePath);
-            });
+            menu->addAction("Copy File Path", [filePath] { QGuiApplication::clipboard()->setText(filePath); });
             // Reference: http://lynxline.com/show-in-finder-show-in-explorer/ and https://forum.qt.io/post/296072
 #if defined(Q_OS_MACOS)
             menu->addAction("Reveal in Finder", [filePath] {
@@ -1016,6 +1075,22 @@ void AppWindow::onTabContextMenuRequested(const QPoint &pos)
             menu->addAction("Open Containing Folder",
                             [filePath] { QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(filePath).path())); });
         }
+        menu->addSeparator();
+        if (!widget->getProblemURL().isEmpty())
+        {
+            menu->addAction("Copy Problem URL",
+                            [widget] { QGuiApplication::clipboard()->setText(widget->getProblemURL()); });
+        }
+        menu->addAction("Set Problem URL", [widget, this] {
+            bool ok = false;
+            auto url =
+                QInputDialog::getText(this, "Set Problem URL", "Enter the new problem URL here:", QLineEdit::Normal,
+                                      widget->getProblemURL().isEmpty() ? "https://codeforces.com/contest//problem/"
+                                                                        : widget->getProblemURL(),
+                                      &ok);
+            if (ok)
+                widget->setProblemURL(url);
+        });
         menu->popup(ui->tabWidget->tabBar()->mapToGlobal(pos));
     }
 }
